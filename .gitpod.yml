@@ -1,0 +1,15 @@
+tasks:
+  - name: Install System Dependencies & Packages
+    init: |
+      sudo apt-get update
+      sudo apt-get install -y libnss3 libatk1.0-0 libatk-bridge2.0-0 libgdk-pixbuf2.0-0 libgtk-3-0 libgbm-dev libxss1 libasound2 xvfb
+      npm install
+    command: |
+      echo "✅ Workspace is ready."
+      echo "➡️ To create the database, run: npx prisma migrate dev --name init"
+      echo "➡️ To start the app, run: npm run dev:electron"
+ports:
+  - port: 3000
+    onOpen: open-preview
+  - port: 6080
+    onOpen: open-browser

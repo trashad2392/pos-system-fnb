@@ -1,0 +1,40 @@
+# .github/workflows/build.yml
+
+name: Build Electron App
+
+on:
+  push:
+    branches: [ "feature/electron-poc-final" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Create SQLite Database
+        run: npm run migrate -- --name init
+
+      - name: Build Electron App
+        run: npm run build:electron
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pos-system-${{ matrix.os }}
+          path: dist/

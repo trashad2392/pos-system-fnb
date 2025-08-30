@@ -1,0 +1,68 @@
+{
+  "name": "pos-system-nextjs",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "generate": "npx prisma generate",
+    "migrate": "npx prisma migrate dev",
+    "dev:electron": "concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "build:prisma": "node scripts/build-prisma.js",
+    "build:electron": "npm run generate && npm run build:prisma && next build && electron-builder --win --mac --linux"
+  },
+  "build": {
+    "appId": "com.yourname.possystem",
+    "productName": "POS System",
+    "files": [
+      "out/**/*",
+      "main.js",
+      "preload.js",
+      "src/lib/**/*",
+      "prisma/bundled/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "prisma/prisma/dev.db",
+        "to": "dev.db"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    }
+  },
+  "dependencies": {
+    "@mantine/core": "^7.11.1",
+    "@mantine/hooks": "^7.11.1",
+    "@prisma/client": "^5.17.0",
+    "@tabler/icons-react": "^3.11.0",
+    "dotenv": "^16.4.5",
+    "electron-is-dev": "^3.0.1",
+    "electron-serve": "^2.1.1",
+    "next": "14.2.5",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "dotenv-cli": "^7.4.2",
+    "electron": "^31.2.1",
+    "electron-builder": "^24.13.3",
+    "esbuild": "^0.25.9",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8.4.39",
+    "postcss-preset-mantine": "^1.15.0",
+    "prisma": "^5.17.0",
+    "wait-on": "^7.2.0"
+  }
+}

@@ -1,0 +1,45 @@
+// prisma/schema.prisma
+
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../node_modules/.prisma/client"
+  // Update this line to include all the platforms you want to support
+  binaryTargets = ["native", "windows", "darwin", "darwin-arm64", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./prisma/dev.db"
+}
+
+// Your models (Product, Sale, etc.) go here
+// ... keep your existing models exactly as they are ...
+
+model Product {
+  id              Int      @id @default(autoincrement())
+  sku             String   @unique
+  name            String
+  price           Float
+  stock_quantity  Int
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  is_archived     Boolean  @default(false)
+  SaleItem        SaleItem[]
+}
+
+model Sale {
+  id           Int        @id @default(autoincrement())
+  total_amount Float
+  created_at   DateTime   @default(now())
+  items        SaleItem[]
+}
+
+model SaleItem {
+  id            Int      @id @default(autoincrement())
+  sale_id       Int
+  product_id    Int
+  quantity      Int
+  price_at_sale Float
+  sale          Sale     @relation(fields: [sale_id], references: [id])
+  product       Product  @relation(fields: [product_id], references: [id])
+}
