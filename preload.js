@@ -2,11 +2,32 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  // All of our database functions are exposed here
+  // Product Functions
   getProducts: () => ipcRenderer.invoke('get-products'),
   addProduct: (data) => ipcRenderer.invoke('add-product', data),
-  updateProduct: (id, data) => ipcRenderer.invoke('update-product', id, data),
+  updateProduct: (id, data) => ipcRenderer.invoke('update-product', { id, data }), // Ensure format is consistent
   deleteProduct: (id) => ipcRenderer.invoke('delete-product', id),
+  
+  // Sale/Order Functions
   createSale: (items) => ipcRenderer.invoke('create-sale', items),
   getSales: () => ipcRenderer.invoke('get-sales'),
+
+  // Category Functions
+  getCategories: () => ipcRenderer.invoke('get-categories'),
+  addCategory: (name) => ipcRenderer.invoke('add-category', name),
+  updateCategory: (data) => ipcRenderer.invoke('update-category', data),
+  deleteCategory: (id) => ipcRenderer.invoke('delete-category', id),
+
+  // Modifier Functions
+  getModifierGroups: () => ipcRenderer.invoke('get-modifier-groups'),
+  addModifierGroup: (data) => ipcRenderer.invoke('add-modifier-group', data),
+  updateModifierGroup: (id, data) => ipcRenderer.invoke('update-modifier-group', { id, data }),
+  deleteModifierGroup: (id) => ipcRenderer.invoke('delete-modifier-group', id),
+  addModifierOption: (data) => ipcRenderer.invoke('add-modifier-option', data),
+  updateModifierOption: (id, data) => ipcRenderer.invoke('update-modifier-option', { id, data }),
+  deleteModifierOption: (id) => ipcRenderer.invoke('delete-modifier-option', id),
+
+  // --- NEW IMPORT FUNCTIONS ---
+  openImportDialog: () => ipcRenderer.invoke('open-file-dialog'),
+  importMenuFromJson: (json) => ipcRenderer.invoke('import-menu-from-json', json),
 });

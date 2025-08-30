@@ -2,7 +2,7 @@
 const { PrismaClient, Prisma } = require('../../prisma/bundled');
 const path = require('path');
 const fs = require('fs');
-const os = require('os'); // <-- Import the 'os' module
+const os = require('os');
 const { app } = require('electron');
 
 const isDev = !app.isPackaged;
@@ -16,9 +16,6 @@ if (isDev) {
 } else {
     const userDataPath = app.getPath('userData');
     dbPath = path.join(userDataPath, 'pos.db');
-
-    // --- THIS IS THE KEY LOGIC CHANGE ---
-    // Detect the platform and architecture to find the correct engine
     try {
         const platform = os.platform();
         const arch = os.arch();
@@ -61,6 +58,7 @@ const prismaInstance = new PrismaClient({
     },
 });
 
+// THIS IS THE IMPORTANT PART: We export an object
 module.exports = {
     prisma: prismaInstance,
     Prisma,

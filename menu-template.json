@@ -1,0 +1,103 @@
+{
+  "modifierGroups": [
+    {
+      "name": "Milk Options",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "options": [
+        { "name": "Whole Milk", "priceAdjustment": 0.00 },
+        { "name": "Skim Milk", "priceAdjustment": 0.00 },
+        { "name": "Oat Milk", "priceAdjustment": 0.75 },
+        { "name": "Almond Milk", "priceAdjustment": 0.75 }
+      ]
+    },
+    {
+      "name": "Espresso Options",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "options": [
+        { "name": "Single Shot", "priceAdjustment": 0.00 },
+        { "name": "Double Shot", "priceAdjustment": 1.00 }
+      ]
+    },
+    {
+      "name": "Syrup Flavors",
+      "minSelection": 0,
+      "maxSelection": 1,
+      "options": [
+        { "name": "Vanilla Syrup", "priceAdjustment": 0.50 },
+        { "name": "Caramel Syrup", "priceAdjustment": 0.50 },
+        { "name": "Hazelnut Syrup", "priceAdjustment": 0.50 }
+      ]
+    },
+    {
+      "name": "Sandwich Add-ons",
+      "minSelection": 0,
+      "maxSelection": 3,
+      "options": [
+        { "name": "Avocado", "priceAdjustment": 2.00 },
+        { "name": "Bacon", "priceAdjustment": 1.50 },
+        { "name": "Extra Cheese", "priceAdjustment": 1.00 }
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "name": "Hot Coffees",
+      "products": [
+        {
+          "name": "Latte",
+          "sku": "COF-LAT",
+          "price": 4.50,
+          "modifierGroups": ["Milk Options", "Espresso Options", "Syrup Flavors"]
+        },
+        {
+          "name": "Cappuccino",
+          "sku": "COF-CAP",
+          "price": 4.25,
+          "modifierGroups": ["Milk Options", "Espresso Options"]
+        },
+        {
+          "name": "Americano",
+          "sku": "COF-AME",
+          "price": 3.50,
+          "modifierGroups": ["Espresso Options"]
+        }
+      ]
+    },
+    {
+      "name": "Sandwiches",
+      "products": [
+        {
+          "name": "Turkey Club",
+          "sku": "SAN-TUR",
+          "price": 9.50,
+          "modifierGroups": ["Sandwich Add-ons"]
+        },
+        {
+          "name": "Veggie Delight",
+          "sku": "SAN-VEG",
+          "price": 8.00,
+          "modifierGroups": ["Sandwich Add-ons"]
+        }
+      ]
+    },
+    {
+      "name": "Pastries",
+      "products": [
+        {
+          "name": "Croissant",
+          "sku": "PAS-CRO",
+          "price": 3.00,
+          "modifierGroups": []
+        },
+        {
+          "name": "Blueberry Muffin",
+          "sku": "PAS-MUF",
+          "price": 3.25,
+          "modifierGroups": []
+        }
+      ]
+    }
+  ]
+}
