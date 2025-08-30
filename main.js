@@ -32,6 +32,7 @@ function setupDatabase() {
   }
 }
 
+// in main.js
   function setupIpcHandlers() {
     // --- All existing handlers for Products, Sales, Categories, Modifiers ---
     ipcMain.handle('get-products', () => prisma.product.findMany({ where: { isArchived: false }, orderBy: { id: 'asc' }, include: { category: true, modifierGroups: true } }));

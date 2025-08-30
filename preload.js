@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('api', {
   // Product Functions
   getProducts: () => ipcRenderer.invoke('get-products'),
   addProduct: (data) => ipcRenderer.invoke('add-product', data),
-  updateProduct: (id, data) => ipcRenderer.invoke('update-product', { id, data }), // Ensure format is consistent
+  updateProduct: (id, data) => ipcRenderer.invoke('update-product', { id, data }),
   deleteProduct: (id) => ipcRenderer.invoke('delete-product', id),
   
   // Sale/Order Functions
@@ -27,7 +27,13 @@ contextBridge.exposeInMainWorld('api', {
   updateModifierOption: (id, data) => ipcRenderer.invoke('update-modifier-option', { id, data }),
   deleteModifierOption: (id) => ipcRenderer.invoke('delete-modifier-option', id),
 
-  // --- NEW IMPORT FUNCTIONS ---
+  // Import Functions
   openImportDialog: () => ipcRenderer.invoke('open-file-dialog'),
   importMenuFromJson: (json) => ipcRenderer.invoke('import-menu-from-json', json),
+
+  // --- TABLE FUNCTIONS (NEW) ---
+  getTables: () => ipcRenderer.invoke('get-tables'),
+  addTable: (name) => ipcRenderer.invoke('add-table', name),
+  updateTable: (data) => ipcRenderer.invoke('update-table', data),
+  deleteTable: (id) => ipcRenderer.invoke('delete-table', id),
 });
