@@ -56,29 +56,22 @@ model ModifierOption {
 
 // -- OPERATIONS MODELS --
 
-// REMOVED the TableStatus enum as it's not supported by SQLite
-
 model Table {
   id      Int         @id @default(autoincrement())
   name    String      @unique
-  // CHANGED: The status is now a String, with a default value.
-  // We'll manage the allowed values ("AVAILABLE", "OCCUPIED", etc.) in our application code.
   status  String      @default("AVAILABLE")
   orders  Order[]
 }
 
-// REMOVED the OrderStatus enum as it's not supported by SQLite
-
 model Order {
-  id          Int         @id @default(autoincrement())
-  // CHANGED: The status is now a String, with a default value.
-  // We'll manage the allowed values ("OPEN", "PAID", "CANCELED") in our application code.
-  status      String      @default("OPEN")
-  totalAmount Float       @default(0)
-  createdAt   DateTime    @default(now())
+  id          Int      @id @default(autoincrement())
+  status      String   @default("OPEN")
+  orderType   String   @default("Dine-In") // The new field is here
+  totalAmount Float    @default(0)
+  createdAt   DateTime @default(now())
   
   tableId     Int?
-  table       Table?      @relation(fields: [tableId], references: [id])
+  table       Table?   @relation(fields: [tableId], references: [id])
   
   items       OrderItem[]
 }

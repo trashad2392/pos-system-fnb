@@ -5,12 +5,15 @@ contextBridge.exposeInMainWorld('api', {
   // Product Functions
   getProducts: () => ipcRenderer.invoke('get-products'),
   addProduct: (data) => ipcRenderer.invoke('add-product', data),
-  updateProduct: (id, data) => ipcRenderer.invoke('update-product', { id, data }),
+  updateProduct: (data) => ipcRenderer.invoke('update-product', data),
   deleteProduct: (id) => ipcRenderer.invoke('delete-product', id),
   
   // Sale/Order Functions
   createSale: (items) => ipcRenderer.invoke('create-sale', items),
   getSales: () => ipcRenderer.invoke('get-sales'),
+  createOrder: (data) => ipcRenderer.invoke('create-order', data),
+  getOpenOrderForTable: (tableId) => ipcRenderer.invoke('get-open-order-for-table', tableId),
+  addItemToOrder: (data) => ipcRenderer.invoke('add-item-to-order', data),
 
   // Category Functions
   getCategories: () => ipcRenderer.invoke('get-categories'),
@@ -31,7 +34,7 @@ contextBridge.exposeInMainWorld('api', {
   openImportDialog: () => ipcRenderer.invoke('open-file-dialog'),
   importMenuFromJson: (json) => ipcRenderer.invoke('import-menu-from-json', json),
 
-  // --- TABLE FUNCTIONS (NEW) ---
+  // Table Functions
   getTables: () => ipcRenderer.invoke('get-tables'),
   addTable: (name) => ipcRenderer.invoke('add-table', name),
   updateTable: (data) => ipcRenderer.invoke('update-table', data),
