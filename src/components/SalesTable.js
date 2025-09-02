@@ -1,13 +1,10 @@
 // src/components/SalesTable.js
 "use client";
 
-import { Table, Text } from '@mantine/core';
+import { Table, Text, Box } from '@mantine/core';
 
-// This component is fine, no changes needed here.
-// We'll assume it exists at '@/components/ClientDateTime.js'
 const ClientDateTime = ({ date }) => {
   if (!date) return null;
-  // Using toLocaleString for a user-friendly format
   return new Date(date).toLocaleString(); 
 };
 
@@ -19,30 +16,39 @@ export default function SalesTable({ sales }) {
           <Table.Tr>
             <Table.Th>Sale ID</Table.Th>
             <Table.Th>Date & Time</Table.Th>
+            <Table.Th>Type</Table.Th>
+            <Table.Th>Payment Method</Table.Th>
             <Table.Th>Items Sold</Table.Th>
             <Table.Th>Total Amount</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
           {sales.map((sale) => (
-            // --- CHANGE 1: Use sale.id for the key ---
             <Table.Tr key={sale.id}>
-              {/* --- CHANGE 2: Use sale.id for the display --- */}
               <Table.Td>{sale.id}</Table.Td>
               <Table.Td>
-                <ClientDateTime date={sale.created_at} />
+                <ClientDateTime date={sale.createdAt} />
               </Table.Td>
+              <Table.Td>{sale.orderType}</Table.Td>
+              {/* --- NEW COLUMN DATA --- */}
+              <Table.Td>{sale.paymentMethod || 'N/A'}</Table.Td>
               <Table.Td>
-                <div>
-                  {sale.items.map((item, index) => (
-                    <p key={index} style={{ margin: 0, padding: '2px 0', fontSize: '14px' }}>
-                      {/* --- CHANGE 3: Use item.product.name to get the name --- */}
-                      {`${item.product.name} (x${item.quantity}) @ $${Number(item.price_at_sale).toFixed(2)}`}
-                    </p>
-                  ))}
-                </div>
+                {sale.items.map((item) => (
+                  <Box key={item.id} mb="xs">
+                    <Text size="sm" fw={500}>
+                      {item.product.name} (x{item.quantity}) @ ${Number(item.priceAtTimeOfOrder).toFixed(2)}
+                    </Text>
+                    {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+                      <Box pl="sm">
+                        {item.selectedModifiers.map(mod => (
+                          <Text key={mod.id} size="xs" c="dimmed">&bull; {mod.name}</Text>
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                ))}
               </Table.Td>
-              <Table.Td>${Number(sale.total_amount).toFixed(2)}</Table.Td>
+              <Table.Td>${Number(sale.totalAmount).toFixed(2)}</Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>

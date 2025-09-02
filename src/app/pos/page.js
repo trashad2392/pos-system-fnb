@@ -4,6 +4,7 @@
 import TableSelectView from './components/TableSelectView';
 import OrderView from './components/OrderView';
 import ModifierModal from './components/ModifierModal';
+import PaymentModal from './components/PaymentModal';
 import { usePosLogic } from '../../hooks/usePosLogic';
 
 export default function PosPage() {
@@ -14,6 +15,8 @@ export default function PosPage() {
     activeTab,
     customizingProduct,
     modifierModalOpened,
+    paymentModalOpened,
+    selectedItemId, // <-- The state we need
     actions
   } = usePosLogic();
   
@@ -25,6 +28,12 @@ export default function PosPage() {
           onBack={actions.handleBackToMainScreen} 
           menu={menu} 
           onProductSelect={actions.handleProductSelect}
+          onUpdateQuantity={actions.handleUpdateItemQuantity}
+          onRemoveItem={actions.handleRemoveItem}
+          onFinalize={actions.openPaymentModal}
+          // --- THESE TWO PROPS ARE THE FIX ---
+          selectedItemId={selectedItemId}
+          onSelectItem={actions.handleSelectItem}
         />
       ) : (
         <TableSelectView 
@@ -38,12 +47,18 @@ export default function PosPage() {
         />
       )}
 
-      {/* The Modifier Modal is always available but only shows when 'opened' is true */}
       <ModifierModal
         product={customizingProduct}
         opened={modifierModalOpened}
         onClose={actions.closeModifierModal}
         onConfirm={actions.handleConfirmModifiers}
+      />
+      
+      <PaymentModal
+        order={activeOrder}
+        opened={paymentModalOpened}
+        onClose={actions.closePaymentModal}
+        onConfirmPayment={actions.handleFinalizeOrder}
       />
     </div>
   );

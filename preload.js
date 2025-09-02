@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld('api', {
   createOrder: (data) => ipcRenderer.invoke('create-order', data),
   getOpenOrderForTable: (tableId) => ipcRenderer.invoke('get-open-order-for-table', tableId),
   addItemToOrder: (data) => ipcRenderer.invoke('add-item-to-order', data),
+  updateItemQuantity: (data) => ipcRenderer.invoke('update-item-quantity', data),
+  removeItemFromOrder: (data) => ipcRenderer.invoke('remove-item-from-order', data),
+  finalizeOrder: (data) => ipcRenderer.invoke('finalize-order', data), // NEW
 
   // Category Functions
   getCategories: () => ipcRenderer.invoke('get-categories'),

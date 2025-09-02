@@ -5,15 +5,17 @@ import { useState, useEffect } from 'react';
 import { useDisclosure } from '@mantine/hooks';
 
 export function usePosLogic() {
-  // All state now lives inside the hook
+  // --- STATE MANAGEMENT ---
   const [activeOrder, setActiveOrder] = useState(null);
   const [tables, setTables] = useState([]);
   const [menu, setMenu] = useState({ products: [], categories: [] });
   const [activeTab, setActiveTab] = useState('dine-in');
   const [customizingProduct, setCustomizingProduct] = useState(null);
+  const [selectedItemId, setSelectedItemId] = useState(null);
   const [modifierModalOpened, { open: openModifierModal, close: closeModifierModal }] = useDisclosure(false);
+  const [paymentModalOpened, { open: openPaymentModal, close: closePaymentModal }] = useDisclosure(false);
 
-  // Data fetching logic
+  // --- DATA FETCHING ---
   const fetchInitialData = async () => {
     try {
       const tableData = await window.api.getTables();
@@ -28,7 +30,13 @@ export function usePosLogic() {
     fetchInitialData();
   }, []);
 
-  // All handler functions now live inside the hook
+  // When a new order becomes active, clear any previous item selection
+  useEffect(() => {
+    setSelectedItemId(null);
+  }, [activeOrder?.id]);
+
+
+  // --- ORDER LIFECYCLE ACTIONS ---
   const startOrder = async ({ tableId, orderType }) => {
     try {
       const selectedTable = tableId ? tables.find(t => t.id === tableId) : null;
@@ -60,19 +68,89 @@ export function usePosLogic() {
       alert(`Error: ${error.message}`);
     }
   };
+
+  const handleBackToMainScreen = async () => {
+    setActiveOrder(null);
+    const updatedTables = await window.api.getTables();
+    setTables(updatedTables);
+  };
   
+  const handleFinalizeOrder = async (paymentMethod) => {
+    if (!activeOrder) return;
+    try {
+      await window.api.finalizeOrder({ 
+        orderId: activeOrder.id,
+        paymentMethod: paymentMethod,
+      });
+      alert('Order finalized successfully!');
+      closePaymentModal();
+      handleBackToMainScreen();
+    } catch (error) {
+      console.error('Failed to finalize order:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  // --- CART ITEM ACTIONS ---
+  const handleAddItem = async (product, selectedModifierIds = []) => {
+    if (!activeOrder) return;
+    try {
+      const updatedOrder = await window.api.addItemToOrder({
+        orderId: activeOrder.id,
+        productId: product.id,
+        selectedModifierIds,
+      });
+      setActiveOrder(updatedOrder);
+
+      // --- NEW: Automatically select the newly added item ---
+      if (updatedOrder.items && updatedOrder.items.length > 0) {
+        // The newest item is the last one in the list returned from the backend
+        const lastItem = updatedOrder.items[updatedOrder.items.length - 1];
+        setSelectedItemId(lastItem.id);
+      }
+    } catch (error) {
+      console.error('Failed to add item:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  const handleUpdateItemQuantity = async (orderItemId, quantity) => {
+    if (!activeOrder) return;
+    try {
+      const updatedOrder = await window.api.updateItemQuantity({
+        orderId: activeOrder.id,
+        orderItemId,
+        quantity,
+      });
+      setActiveOrder(updatedOrder);
+    } catch (error) {
+      console.error('Failed to update item quantity:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  const handleRemoveItem = async (orderItemId) => {
+    if (!activeOrder) return;
+    try {
+      const updatedOrder = await window.api.removeItemFromOrder({
+        orderId: activeOrder.id,
+        orderItemId,
+      });
+      setActiveOrder(updatedOrder);
+      setSelectedItemId(null); // --- NEW: Clear selection after removing an item ---
+    } catch (error) {
+      console.error('Failed to remove item:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
+
+  // --- UI INTERACTION HANDLERS ---
   const handleTableSelect = (table) => {
     if (table.status === 'AVAILABLE') {
       startOrder({ tableId: table.id, orderType: 'Dine-In' });
     } else {
       resumeOrder(table);
     }
-  };
-
-  const handleBackToMainScreen = async () => {
-    setActiveOrder(null);
-    const updatedTables = await window.api.getTables();
-    setTables(updatedTables);
   };
   
   const handleProductSelect = (product) => {
@@ -83,28 +161,17 @@ export function usePosLogic() {
       handleAddItem(product, []);
     }
   };
-  
-  const handleAddItem = async (product, selectedModifierIds = []) => {
-    if (!activeOrder) return;
-    try {
-      const updatedOrder = await window.api.addItemToOrder({
-        orderId: activeOrder.id,
-        productId: product.id,
-        selectedModifierIds,
-      });
-      setActiveOrder(updatedOrder);
-    } catch (error) {
-      console.error('Failed to add item:', error);
-      alert(`Error: ${error.message}`);
-    }
-  };
 
   const handleConfirmModifiers = (product, selectedIds) => {
     handleAddItem(product, selectedIds);
     closeModifierModal();
   };
 
-  // Return all the state and functions that the UI needs
+  const handleSelectItem = (itemId) => {
+    setSelectedItemId(currentItemId => currentItemId === itemId ? null : itemId);
+  };
+
+  // --- RETURN VALUE ---
   return {
     activeOrder,
     tables,
@@ -112,6 +179,8 @@ export function usePosLogic() {
     activeTab,
     customizingProduct,
     modifierModalOpened,
+    paymentModalOpened,
+    selectedItemId,
     actions: {
       setActiveTab,
       handleTableSelect,
@@ -119,7 +188,13 @@ export function usePosLogic() {
       handleBackToMainScreen,
       handleProductSelect,
       handleConfirmModifiers,
-      closeModifierModal
+      closeModifierModal,
+      handleUpdateItemQuantity,
+      handleRemoveItem,
+      openPaymentModal,
+      closePaymentModal,
+      handleFinalizeOrder,
+      handleSelectItem,
     }
   };
 }

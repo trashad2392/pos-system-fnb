@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Modal, Title, Text, Button, Group, Divider, Checkbox, Radio, ScrollArea, Box } from '@mantine/core';
+import { Modal, Title, Text, Button, Group, Divider, ScrollArea, Box, Chip } from '@mantine/core';
 
 export default function ModifierModal({ product, opened, onClose, onConfirm }) {
   const [selections, setSelections] = useState({});
@@ -26,13 +26,9 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
 
     for (const group of product.modifierGroups) {
       const groupSelections = selections[group.id] || [];
-      
-      // Check if the number of selections is valid for this group
       if (groupSelections.length < group.minSelection) {
         allGroupsValid = false;
       }
-
-      // Add price adjustments to total
       for (const optionId of groupSelections) {
         const option = group.options.find(opt => opt.id === optionId);
         if (option) {
@@ -43,24 +39,27 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
 
     setTotalPrice(newTotal);
     setIsValid(allGroupsValid);
-
   }, [selections, product]);
 
-  const handleSelectionChange = (groupId, optionId, isMultiSelect) => {
+  const handleSelectionChange = (groupId, optionId) => {
     setSelections(currentSelections => {
-      const newGroupSelections = isMultiSelect ? (currentSelections[groupId] || []) : [];
-      const optionIndex = newGroupSelections.indexOf(optionId);
+      const group = product.modifierGroups.find(g => g.id === groupId);
+      const currentGroupSelections = currentSelections[groupId] || [];
+      const isSelected = currentGroupSelections.includes(optionId);
+      let newGroupSelections;
 
-      if (optionIndex > -1) {
-        newGroupSelections.splice(optionIndex, 1); // Deselect
+      if (isSelected) {
+        newGroupSelections = currentGroupSelections.filter(id => id !== optionId);
       } else {
-        // Enforce max selections for multi-select groups
-        const group = product.modifierGroups.find(g => g.id === groupId);
-        if (isMultiSelect && newGroupSelections.length >= group.maxSelection) {
-          // Optional: alert the user they can't select more
-          return currentSelections;
+        if (group.maxSelection === 1) {
+          newGroupSelections = [optionId];
+        } else {
+          if (currentGroupSelections.length < group.maxSelection) {
+            newGroupSelections = [...currentGroupSelections, optionId];
+          } else {
+            newGroupSelections = currentGroupSelections;
+          }
         }
-        newGroupSelections.push(optionId); // Select
       }
       
       return { ...currentSelections, [groupId]: newGroupSelections };
@@ -82,31 +81,32 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
           <Box key={group.id} mb="md">
             <Title order={4}>{group.name}</Title>
             <Text size="sm" c="dimmed">
-              {group.minSelection === group.maxSelection 
-                ? `Choose exactly ${group.minSelection}` 
-                : `Choose between ${group.minSelection} and ${group.maxSelection}`
+              {group.minSelection === 0 && group.maxSelection > 1 ? `Choose up to ${group.maxSelection}` :
+               group.minSelection === group.maxSelection ? `Choose exactly ${group.minSelection}` :
+               `Choose between ${group.minSelection} and ${group.maxSelection}`
               }
             </Text>
             <Divider my="xs" />
             
-            {/* Render Radio for single-select, Checkbox for multi-select */}
-            {group.maxSelection === 1 ? (
-              <Radio.Group value={selections[group.id]?.[0]?.toString() || null} onChange={(val) => handleSelectionChange(group.id, Number(val), false)}>
-                <Group mt="xs">
-                  {group.options.map(option => (
-                    <Radio key={option.id} value={option.id.toString()} label={`${option.name} ($${option.priceAdjustment.toFixed(2)})`} />
-                  ))}
-                </Group>
-              </Radio.Group>
-            ) : (
-              <Checkbox.Group value={selections[group.id]?.map(String) || []} onChange={(vals) => setSelections({...selections, [group.id]: vals.map(Number)})}>
-                <Group mt="xs">
-                  {group.options.map(option => (
-                    <Checkbox key={option.id} value={option.id.toString()} label={`${option.name} ($${option.priceAdjustment.toFixed(2)})`} />
-                  ))}
-                </Group>
-              </Checkbox.Group>
-            )}
+            <Group mt="xs" gap="md">
+              {group.options.map(option => {
+                const isSelected = selections[group.id]?.includes(option.id);
+                return (
+                  <Chip
+                    key={option.id}
+                    value={option.id.toString()}
+                    checked={isSelected}
+                    onChange={() => handleSelectionChange(group.id, option.id)}
+                    variant="outline"
+                    // --- UPDATED STYLING ---
+                    size="lg"      // Makes the text and overall size larger
+                    radius="md"     // Makes the corners rounded, not a full pill
+                  >
+                    {option.name} {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
+                  </Chip>
+                );
+              })}
+            </Group>
           </Box>
         ))}
       </ScrollArea>
