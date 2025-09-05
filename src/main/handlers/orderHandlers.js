@@ -6,21 +6,14 @@ const { prisma } = require('../../lib/db');
  * A helper function to recalculate an order's total and return the full updated order object.
  */
 async function getUpdatedOrder(tx, orderId) {
-  // Find all remaining items in the cart
   const allItems = await tx.orderItem.findMany({
     where: { orderId: orderId },
   });
-
-  // Recalculate the total
   const totalAmount = allItems.reduce((sum, item) => sum + (item.quantity * item.priceAtTimeOfOrder), 0);
-
-  // Update the order's total amount
   await tx.order.update({
     where: { id: orderId },
     data: { totalAmount: totalAmount },
   });
-
-  // Return the full order object for the UI to refresh
   return tx.order.findUnique({
     where: { id: orderId },
     include: { 
@@ -88,10 +81,7 @@ function setupOrderHandlers() {
       });
 
       if (matchingItem) {
-        await tx.orderItem.update({
-          where: { id: matchingItem.id },
-          data: { quantity: { increment: 1 } },
-        });
+        await tx.orderItem.update({ where: { id: matchingItem.id }, data: { quantity: { increment: 1 } } });
       } else {
         await tx.orderItem.create({
           data: {
@@ -123,7 +113,6 @@ function setupOrderHandlers() {
     });
   });
 
-  // UPDATED: Now accepts and saves the paymentMethod
   ipcMain.handle('finalize-order', async (e, { orderId, paymentMethod }) => {
     return prisma.$transaction(async (tx) => {
       const orderToFinalize = await tx.order.findUnique({ where: { id: orderId } });
@@ -131,20 +120,64 @@ function setupOrderHandlers() {
       if (orderToFinalize.status !== 'OPEN') throw new Error('This order is not open and cannot be finalized.');
       
       if (orderToFinalize.tableId) {
-        await tx.table.update({
-          where: { id: orderToFinalize.tableId },
-          data: { status: 'AVAILABLE' },
-        });
+        await tx.table.update({ where: { id: orderToFinalize.tableId }, data: { status: 'AVAILABLE' } });
       }
       
-      // Update the order status and save the payment method
       return tx.order.update({
         where: { id: orderId },
-        data: { 
-          status: 'PAID',
-          paymentMethod: paymentMethod, // <-- The change is here
-        },
+        data: { status: 'PAID', paymentMethod: paymentMethod },
       });
+    });
+  });
+  
+  ipcMain.handle('draft-order', async (e, { orderId }) => {
+    return prisma.$transaction(async (tx) => {
+      const orderToDraft = await tx.order.findUnique({ where: { id: orderId } });
+      if (!orderToDraft) throw new Error('Order to draft not found.');
+      
+      if (orderToDraft.tableId) {
+        await tx.table.update({ where: { id: orderToDraft.tableId }, data: { status: 'AVAILABLE' } });
+      }
+      
+      return tx.order.update({
+        where: { id: orderId },
+        data: { status: 'DRAFT', tableId: null },
+      });
+    });
+  });
+
+  ipcMain.handle('get-drafted-orders', async (e, { orderType }) => {
+    return prisma.order.findMany({
+      where: { status: 'DRAFT', orderType: orderType },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: { items: { include: { product: true, selectedModifiers: true } } }
+    });
+  });
+
+  ipcMain.handle('resume-drafted-order', async (e, { orderId }) => {
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { status: 'OPEN' },
+    });
+    return prisma.order.findUnique({
+      where: { id: orderId },
+      include: { table: true, items: { include: { product: true, selectedModifiers: true } } }
+    });
+  });
+  
+  // NEW: Handler for deleting a drafted order
+  ipcMain.handle('delete-drafted-order', async (e, { orderId }) => {
+    return prisma.$transaction(async (tx) => {
+      const draft = await tx.order.findUnique({ where: { id: orderId } });
+      if (!draft || draft.status !== 'DRAFT') {
+        throw new Error('Order is not a valid draft and cannot be deleted.');
+      }
+      // First, delete all items associated with this order
+      await tx.orderItem.deleteMany({ where: { orderId: orderId } });
+      // Finally, delete the order itself
+      await tx.order.delete({ where: { id: orderId } });
+      return { success: true };
     });
   });
   

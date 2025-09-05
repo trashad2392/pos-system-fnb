@@ -1,52 +1,78 @@
 // src/app/pos/page.js
 "use client";
 
+import { Loader, Center } from '@mantine/core';
+import { usePosData } from '../../hooks/usePosData';
+import { usePosLogic } from '../../hooks/usePosLogic';
 import TableSelectView from './components/TableSelectView';
 import OrderView from './components/OrderView';
 import ModifierModal from './components/ModifierModal';
 import PaymentModal from './components/PaymentModal';
-import { usePosLogic } from '../../hooks/usePosLogic';
+import DraftListView from './components/DraftListView';
+import PosHomeView from './components/PosHomeView';
+import OrderTypeHubView from './components/OrderTypeHubView';
 
 export default function PosPage() {
+  const { tables, menu, isLoading, refreshData } = usePosData();
   const {
-    activeOrder,
-    tables,
-    menu,
-    activeTab,
-    customizingProduct,
-    modifierModalOpened,
-    paymentModalOpened,
-    selectedItemId, // <-- The state we need
-    actions
-  } = usePosLogic();
+    posView, activeOrder, activeOrderType, draftedOrders,
+    customizingProduct, modifierModalOpened, paymentModalOpened,
+    selectedItemId, actions
+  } = usePosLogic({ tables, refreshData });
   
-  return (
-    <div>
-      {activeOrder ? (
-        <OrderView 
+  if (isLoading) {
+    return <Center style={{ height: '100vh' }}><Loader /></Center>;
+  }
+
+  const renderView = () => {
+    switch(posView) {
+      case 'order-view':
+        return <OrderView 
           order={activeOrder} 
-          onBack={actions.handleBackToMainScreen} 
+          onBack={actions.handleGoBack}
           menu={menu} 
           onProductSelect={actions.handleProductSelect}
           onUpdateQuantity={actions.handleUpdateItemQuantity}
           onRemoveItem={actions.handleRemoveItem}
           onFinalize={actions.openPaymentModal}
-          // --- THESE TWO PROPS ARE THE FIX ---
+          onSaveAsDraft={actions.handleSaveAsDraft}
           selectedItemId={selectedItemId}
           onSelectItem={actions.handleSelectItem}
-        />
-      ) : (
-        <TableSelectView 
+        />;
+      case 'draft-list':
+        return <DraftListView
+          drafts={draftedOrders}
+          onResume={actions.handleResumeDraft}
+          onBack={actions.handleGoBack}
+          orderType={activeOrderType}
+          onDeleteDraft={actions.handleDeleteDraft} // <-- THIS IS THE FIX
+        />;
+      case 'order-type-hub':
+        return <OrderTypeHubView
+          orderType={activeOrderType}
+          onNewOrder={() => actions.startOrder({ tableId: null, orderType: activeOrderType })}
+          onShowDrafts={() => actions.handleShowDrafts(activeOrderType)}
+          onBack={actions.handleGoBack}
+        />;
+      case 'table-select':
+         return <TableSelectView 
           tables={tables} 
-          activeTab={activeTab}
-          onTabChange={actions.setActiveTab}
           onTableSelect={actions.handleTableSelect}
-          onTakeaway={() => actions.startOrder({ tableId: null, orderType: 'Takeaway'})}
-          onDelivery={() => actions.startOrder({ tableId: null, orderType: 'Delivery'})}
-          onDriveThrough={() => actions.startOrder({ tableId: null, orderType: 'Drive-Through'})}
-        />
-      )}
+          onBack={actions.handleGoBack}
+        />;
+      case 'home':
+      default:
+        return <PosHomeView 
+          onSelectDineIn={actions.handleSelectDineIn}
+          onSelectOrderType={actions.handleSelectOrderType}
+        />;
+    }
+  }
 
+  return (
+    <div>
+      {renderView()}
+      
       <ModifierModal
         product={customizingProduct}
         opened={modifierModalOpened}

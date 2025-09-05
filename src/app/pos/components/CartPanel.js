@@ -1,7 +1,7 @@
 // src/app/pos/components/CartPanel.js
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'; // <-- THIS LINE IS THE FIX
 import { Title, Button, Paper, Text, Group, ScrollArea, Divider, Center, Box, ActionIcon } from '@mantine/core';
 import { IconPlus, IconMinus, IconX } from '@tabler/icons-react';
 import Keypad from './Keypad';
@@ -9,20 +9,18 @@ import Keypad from './Keypad';
 export default function CartPanel({ order, onUpdateQuantity, onRemoveItem, onFinalize, selectedItemId, onSelectItem }) {
   const [keypadInput, setKeypadInput] = useState('');
 
-  // When the user selects a different item in the cart, clear the keypad's input.
   useEffect(() => {
     setKeypadInput('');
   }, [selectedItemId]);
 
   const handleNumberPress = (number) => {
     if (!selectedItemId) return;
-    const newString = (keypadInput + number).slice(0, 4); // Limit to 4 digits
+    const newString = (keypadInput + number).slice(0, 4);
     setKeypadInput(newString);
     const newQuantity = parseInt(newString, 10);
     if (!isNaN(newQuantity) && newQuantity > 0) {
       onUpdateQuantity(selectedItemId, newQuantity);
     } else if (newString === '0') {
-      // Allow typing 0 to remove the item
       onUpdateQuantity(selectedItemId, 0);
     }
   };
@@ -42,12 +40,9 @@ export default function CartPanel({ order, onUpdateQuantity, onRemoveItem, onFin
     }
   };
 
-  // UPDATED: This now resets the quantity to 1.
   const handleClear = () => {
     if (!selectedItemId) return;
-    // Clear the local keypad input buffer
     setKeypadInput('');
-    // Call the parent to reset the item's quantity to 1
     onUpdateQuantity(selectedItemId, 1);
   };
 
