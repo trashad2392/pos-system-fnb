@@ -3,13 +3,28 @@
 
 import { useState, useEffect } from 'react';
 import { Title, Grid, Button, Paper, Text, Group, Tabs, ScrollArea, Divider, Center, Box, ActionIcon } from '@mantine/core';
-import { IconArrowLeft, IconPlus, IconMinus, IconX, IconDeviceFloppy } from '@tabler/icons-react';
+import { IconArrowLeft, IconPlus, IconMinus, IconX, IconDeviceFloppy, IconEraser } from '@tabler/icons-react';
 import Keypad from './Keypad';
 
-export default function OrderView({ order, onBack, menu, onProductSelect, onUpdateQuantity, onRemoveItem, onFinalize, onSaveAsDraft, selectedItemId, onSelectItem }) {
+// UPDATED: The signature is simpler, onShowHeldOrders is removed
+export default function OrderView({ 
+  order, 
+  onBack, 
+  menu, 
+  onProductSelect, 
+  onUpdateQuantity, 
+  onRemoveItem, 
+  onFinalize, 
+  onHold,
+  onClearOrder,
+  selectedItemId, 
+  onSelectItem 
+}) {
   const { categories, products } = menu;
   const defaultCategory = categories.length > 0 ? categories[0].id.toString() : null;
   const [keypadInput, setKeypadInput] = useState('');
+
+  const isCartEmpty = !order || !order.items || order.items.length === 0;
 
   useEffect(() => {
     setKeypadInput('');
@@ -17,13 +32,12 @@ export default function OrderView({ order, onBack, menu, onProductSelect, onUpda
 
   const handleNumberPress = (number) => {
     if (!selectedItemId) return;
-    const newString = (keypadInput + number).slice(0, 4);
+    const currentVal = keypadInput === '0' ? '' : keypadInput;
+    const newString = (currentVal + number).slice(0, 4);
     setKeypadInput(newString);
     const newQuantity = parseInt(newString, 10);
-    if (!isNaN(newQuantity) && newQuantity > 0) {
+    if (!isNaN(newQuantity)) {
       onUpdateQuantity(selectedItemId, newQuantity);
-    } else if (newString === '0') {
-      onUpdateQuantity(selectedItemId, 0);
     }
   };
 
@@ -52,12 +66,11 @@ export default function OrderView({ order, onBack, menu, onProductSelect, onUpda
       <Grid.Col span={5}>
         <Group justify="space-between" mb="md">
            <Title order={2}>Current Order</Title>
-           <Text>Order #{order.id}</Text>
         </Group>
         <Paper withBorder style={{ height: '85vh', display: 'flex', flexDirection: 'column' }}>
           <ScrollArea style={{ flex: 1 }}>
             <Box p="xs">
-              {order.items && order.items.length > 0 ? (
+              {!isCartEmpty ? (
                 order.items.map(item => (
                   <Box key={item.id} onClick={() => onSelectItem(item.id)} style={{cursor: 'pointer'}}>
                     <Paper withBorder p="xs" mb="xs" shadow={selectedItemId === item.id ? 'md' : 'xs'}
@@ -107,16 +120,38 @@ export default function OrderView({ order, onBack, menu, onProductSelect, onUpda
               <Title order={3}>Total:</Title>
               <Title order={3}>${Number(order.totalAmount || 0).toFixed(2)}</Title>
             </Group>
-            <Group grow mt="md">
-              {order.orderType !== 'Dine-In' && (
-                <Button variant="outline" size="lg" onClick={onSaveAsDraft} leftSection={<IconDeviceFloppy size={20} />}>
-                  Save as Draft
+            <Grid mt="md">
+              <Grid.Col span={6}>
+                <Button
+                  size="lg"
+                  fullWidth
+                  variant="outline"
+                  leftSection={<IconDeviceFloppy size={20} />}
+                  onClick={onHold} // UPDATED: This button now has one, simple job
+                  disabled={order.orderType === 'Dine-In'}
+                >
+                  {isCartEmpty ? 'View Held' : 'Hold Order'}
                 </Button>
-              )}
-              <Button size="lg" disabled={!order.items || order.items.length === 0} onClick={onFinalize}>
-                Finalize & Pay
-              </Button>
-            </Group>
+              </Grid.Col>
+              <Grid.Col span={6}>
+                 <Button 
+                    size="lg" 
+                    fullWidth 
+                    variant="outline" 
+                    color="red"
+                    leftSection={<IconEraser size={20} />}
+                    disabled={isCartEmpty}
+                    onClick={onClearOrder}
+                  >
+                      Clear Cart
+                  </Button>
+              </Grid.Col>
+              <Grid.Col span={12}>
+                <Button size="lg" fullWidth disabled={isCartEmpty} onClick={onFinalize}>
+                  Finalize & Pay
+                </Button>
+              </Grid.Col>
+            </Grid>
           </Box>
         </Paper>
       </Grid.Col>
@@ -126,7 +161,7 @@ export default function OrderView({ order, onBack, menu, onProductSelect, onUpda
             {order.table ? `Order for ${order.table.name}` : `${order.orderType} Order`}
           </Title>
           <Button onClick={onBack} variant="outline" leftSection={<IconArrowLeft size={16} />}>
-            Back
+            Back to Home
           </Button>
         </Group>
         <Paper withBorder p="md">

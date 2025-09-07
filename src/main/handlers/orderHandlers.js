@@ -2,18 +2,10 @@
 const { ipcMain } = require('electron');
 const { prisma } = require('../../lib/db');
 
-/**
- * A helper function to recalculate an order's total and return the full updated order object.
- */
 async function getUpdatedOrder(tx, orderId) {
-  const allItems = await tx.orderItem.findMany({
-    where: { orderId: orderId },
-  });
+  const allItems = await tx.orderItem.findMany({ where: { orderId: orderId } });
   const totalAmount = allItems.reduce((sum, item) => sum + (item.quantity * item.priceAtTimeOfOrder), 0);
-  await tx.order.update({
-    where: { id: orderId },
-    data: { totalAmount: totalAmount },
-  });
+  await tx.order.update({ where: { id: orderId }, data: { totalAmount: totalAmount } });
   return tx.order.findUnique({
     where: { id: orderId },
     include: { 
@@ -26,10 +18,9 @@ async function getUpdatedOrder(tx, orderId) {
   });
 }
 
-
 function setupOrderHandlers() {
   ipcMain.handle('get-sales', async () => prisma.order.findMany({ 
-    where: { status: 'PAID' },
+    where: { status: { in: ['PAID', 'CLEARED'] } },
     orderBy: { createdAt: 'desc' }, 
     include: { items: { include: { product: true, selectedModifiers: true } } } 
   }));
@@ -60,26 +51,21 @@ function setupOrderHandlers() {
     return prisma.$transaction(async (tx) => {
       const product = await tx.product.findUnique({ where: { id: productId } });
       if (!product) throw new Error('Product not found.');
-
       let modifierPrice = 0;
       if (selectedModifierIds && selectedModifierIds.length > 0) {
         const modifierOptions = await tx.modifierOption.findMany({ where: { id: { in: selectedModifierIds } } });
         modifierPrice = modifierOptions.reduce((sum, opt) => sum + opt.priceAdjustment, 0);
       }
-      
       const priceAtTimeOfOrder = product.price + modifierPrice;
-
       const existingItems = await tx.orderItem.findMany({
         where: { orderId, productId },
         include: { selectedModifiers: { select: { id: true } } },
       });
-
       const sortedSelectedIds = [...selectedModifierIds].sort((a, b) => a - b);
       const matchingItem = existingItems.find(item => {
         const itemModifierIds = item.selectedModifiers.map(m => m.id).sort((a, b) => a - b);
         return JSON.stringify(itemModifierIds) === JSON.stringify(sortedSelectedIds);
       });
-
       if (matchingItem) {
         await tx.orderItem.update({ where: { id: matchingItem.id }, data: { quantity: { increment: 1 } } });
       } else {
@@ -90,7 +76,6 @@ function setupOrderHandlers() {
           },
         });
       }
-      
       return getUpdatedOrder(tx, orderId);
     });
   });
@@ -118,70 +103,61 @@ function setupOrderHandlers() {
       const orderToFinalize = await tx.order.findUnique({ where: { id: orderId } });
       if (!orderToFinalize) throw new Error('Order not found.');
       if (orderToFinalize.status !== 'OPEN') throw new Error('This order is not open and cannot be finalized.');
-      
       if (orderToFinalize.tableId) {
         await tx.table.update({ where: { id: orderToFinalize.tableId }, data: { status: 'AVAILABLE' } });
       }
-      
-      return tx.order.update({
-        where: { id: orderId },
-        data: { status: 'PAID', paymentMethod: paymentMethod },
-      });
+      return tx.order.update({ where: { id: orderId }, data: { status: 'PAID', paymentMethod: paymentMethod } });
     });
   });
   
-  ipcMain.handle('draft-order', async (e, { orderId }) => {
+  ipcMain.handle('hold-order', async (e, { orderId }) => {
     return prisma.$transaction(async (tx) => {
-      const orderToDraft = await tx.order.findUnique({ where: { id: orderId } });
-      if (!orderToDraft) throw new Error('Order to draft not found.');
-      
-      if (orderToDraft.tableId) {
-        await tx.table.update({ where: { id: orderToDraft.tableId }, data: { status: 'AVAILABLE' } });
+      const orderToHold = await tx.order.findUnique({ where: { id: orderId } });
+      if (!orderToHold) throw new Error('Order to hold not found.');
+      if (orderToHold.tableId) {
+        await tx.table.update({ where: { id: orderToHold.tableId }, data: { status: 'AVAILABLE' } });
       }
-      
-      return tx.order.update({
-        where: { id: orderId },
-        data: { status: 'DRAFT', tableId: null },
-      });
+      return tx.order.update({ where: { id: orderId }, data: { status: 'HOLD', tableId: null } });
     });
   });
 
-  ipcMain.handle('get-drafted-orders', async (e, { orderType }) => {
+  ipcMain.handle('get-held-orders', async (e, { orderType }) => {
     return prisma.order.findMany({
-      where: { status: 'DRAFT', orderType: orderType },
+      where: { status: 'HOLD', orderType: orderType },
       orderBy: { createdAt: 'desc' },
       take: 10,
       include: { items: { include: { product: true, selectedModifiers: true } } }
     });
   });
 
-  ipcMain.handle('resume-drafted-order', async (e, { orderId }) => {
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { status: 'OPEN' },
-    });
-    return prisma.order.findUnique({
-      where: { id: orderId },
-      include: { table: true, items: { include: { product: true, selectedModifiers: true } } }
-    });
+  ipcMain.handle('resume-held-order', async (e, { orderId }) => {
+    await prisma.order.update({ where: { id: orderId }, data: { status: 'OPEN' } });
+    return prisma.order.findUnique({ where: { id: orderId }, include: { table: true, items: { include: { product: true, selectedModifiers: true } } } });
   });
   
-  // NEW: Handler for deleting a drafted order
-  ipcMain.handle('delete-drafted-order', async (e, { orderId }) => {
+  ipcMain.handle('delete-held-order', async (e, { orderId }) => {
     return prisma.$transaction(async (tx) => {
-      const draft = await tx.order.findUnique({ where: { id: orderId } });
-      if (!draft || draft.status !== 'DRAFT') {
-        throw new Error('Order is not a valid draft and cannot be deleted.');
+      const heldOrder = await tx.order.findUnique({ where: { id: orderId } });
+      if (!heldOrder || heldOrder.status !== 'HOLD') {
+        throw new Error('Order is not a valid held order and cannot be deleted.');
       }
-      // First, delete all items associated with this order
       await tx.orderItem.deleteMany({ where: { orderId: orderId } });
-      // Finally, delete the order itself
       await tx.order.delete({ where: { id: orderId } });
       return { success: true };
     });
   });
   
-  ipcMain.handle('create-sale', (e, items) => { /* Placeholder */ });
+  ipcMain.handle('clear-order', async (e, { orderId }) => {
+    return prisma.$transaction(async (tx) => {
+      const orderToClear = await tx.order.findUnique({ where: { id: orderId } });
+      if (!orderToClear) throw new Error('Order not found.');
+      if (orderToClear.status !== 'OPEN') throw new Error('Only open orders can be cleared.');
+      if (orderToClear.tableId) {
+        await tx.table.update({ where: { id: orderToClear.tableId }, data: { status: 'AVAILABLE' } });
+      }
+      return tx.order.update({ where: { id: orderId }, data: { status: 'CLEARED' } });
+    });
+  });
 }
 
 module.exports = { setupOrderHandlers };

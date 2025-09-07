@@ -16,6 +16,7 @@ datasource db {
 model Category {
   id        Int       @id @default(autoincrement())
   name      String    @unique
+  sku       String    @unique @default(uuid()) // <-- ADDED
   products  Product[]
 }
 
@@ -35,18 +36,19 @@ model Product {
 }
 
 model ModifierGroup {
-  id            Int      @id @default(autoincrement())
-  name          String
-  minSelection  Int      @default(0)
-  maxSelection  Int      @default(1)
-  options       ModifierOption[]
-  products      Product[] @relation("ProductModifierGroups")
+  id              Int      @id @default(autoincrement())
+  name            String
+  minSelection    Int      @default(0)
+  selectionBudget Int      @default(1) // <-- RENAMED from maxSelection
+  options         ModifierOption[]
+  products        Product[] @relation("ProductModifierGroups")
 }
 
 model ModifierOption {
   id              Int      @id @default(autoincrement())
   name            String
   priceAdjustment Float    @default(0)
+  selectionCost   Int      @default(1) // <-- ADDED
   
   modifierGroupId Int
   modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id])
@@ -65,9 +67,9 @@ model Table {
 
 model Order {
   id               Int      @id @default(autoincrement())
-  status           String   @default("OPEN")
+  status           String   @default("OPEN") // Can be: OPEN, PAID, HOLD, CLEARED
   orderType        String   @default("Dine-In")
-  paymentMethod    String?  // The new field is here
+  paymentMethod    String?
   totalAmount      Float    @default(0)
   createdAt        DateTime @default(now())
   

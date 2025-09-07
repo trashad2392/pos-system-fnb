@@ -4,12 +4,13 @@
 import { Title, Button, Paper, SimpleGrid } from '@mantine/core';
 import { IconTable, IconBox, IconTruckDelivery, IconCar } from '@tabler/icons-react';
 
-export default function PosHomeView({ onSelectDineIn, onSelectOrderType }) {
+// UPDATED: The component now expects an 'onStartOrder' prop
+export default function PosHomeView({ onSelectDineIn, onStartOrder }) {
   const orderTypes = [
     { name: 'Dine-In', type: 'Dine-In', icon: IconTable, action: onSelectDineIn },
-    { name: 'Takeaway', type: 'Takeaway', icon: IconBox, action: () => onSelectOrderType('Takeaway') },
-    { name: 'Delivery', type: 'Delivery', icon: IconTruckDelivery, action: () => onSelectOrderType('Delivery') },
-    { name: 'Drive-Through', type: 'Drive-Through', icon: IconCar, action: () => onSelectOrderType('Drive-Through') },
+    { name: 'Takeaway', type: 'Takeaway', icon: IconBox, action: () => onStartOrder('Takeaway') },
+    { name: 'Delivery', type: 'Delivery', icon: IconTruckDelivery, action: () => onStartOrder('Delivery') },
+    { name: 'Drive-Through', type: 'Drive-Through', icon: IconCar, action: () => onStartOrder('Drive-Through') },
   ];
 
   return (

@@ -9,12 +9,17 @@ const ClientDateTime = ({ date }) => {
 };
 
 export default function SalesTable({ sales }) {
+  // Reverse the array to show the oldest sale first, so the # is sequential (1, 2, 3...).
+  // We create a copy with [...sales] to avoid mutating the original prop.
+  const displayedSales = [...sales].reverse();
+
   return (
     <>
       <Table striped highlightOnHover withTableBorder withColumnBorders>
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Sale ID</Table.Th>
+            {/* UPDATED: Header changed */}
+            <Table.Th>Sale #</Table.Th>
             <Table.Th>Date & Time</Table.Th>
             <Table.Th>Type</Table.Th>
             <Table.Th>Payment Method</Table.Th>
@@ -23,14 +28,15 @@ export default function SalesTable({ sales }) {
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {sales.map((sale) => (
+          {/* UPDATED: Mapping over the reversed array */}
+          {displayedSales.map((sale, index) => (
             <Table.Tr key={sale.id}>
-              <Table.Td>{sale.id}</Table.Td>
+              {/* UPDATED: Displaying the index + 1 for a sequential number */}
+              <Table.Td>{index + 1}</Table.Td>
               <Table.Td>
                 <ClientDateTime date={sale.createdAt} />
               </Table.Td>
               <Table.Td>{sale.orderType}</Table.Td>
-              {/* --- NEW COLUMN DATA --- */}
               <Table.Td>{sale.paymentMethod || 'N/A'}</Table.Td>
               <Table.Td>
                 {sale.items.map((item) => (

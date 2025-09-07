@@ -17,10 +17,11 @@ contextBridge.exposeInMainWorld('api', {
   updateItemQuantity: (data) => ipcRenderer.invoke('update-item-quantity', data),
   removeItemFromOrder: (data) => ipcRenderer.invoke('remove-item-from-order', data),
   finalizeOrder: (data) => ipcRenderer.invoke('finalize-order', data),
-  draftOrder: (data) => ipcRenderer.invoke('draft-order', data),
-  getDraftedOrders: (data) => ipcRenderer.invoke('get-drafted-orders', data),
-  resumeDraftedOrder: (data) => ipcRenderer.invoke('resume-drafted-order', data),
-  deleteDraftedOrder: (data) => ipcRenderer.invoke('delete-drafted-order', data), // NEW
+  holdOrder: (data) => ipcRenderer.invoke('hold-order', data),
+  getHeldOrders: (data) => ipcRenderer.invoke('get-held-orders', data),
+  resumeHeldOrder: (data) => ipcRenderer.invoke('resume-held-order', data),
+  deleteHeldOrder: (data) => ipcRenderer.invoke('delete-held-order', data),
+  clearOrder: (data) => ipcRenderer.invoke('clear-order', data),
 
   // Category Functions
   getCategories: () => ipcRenderer.invoke('get-categories'),

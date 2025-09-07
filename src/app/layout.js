@@ -1,14 +1,15 @@
 // src/app/layout.js
+"use client";
 
-import Link from 'next/link'; // <-- Use the standard Next.js Link
+import Link from 'next/link';
 import { MantineProvider, ColorSchemeScript } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css'; // Import notification styles
 import './globals.css';
 
-export const metadata = {
-  title: 'POS System',
-  description: 'Built with Next.js and Gemini',
-};
+// Metadata can be exported from a client component in the App Router
+// export const metadata = { ... }; // This can be kept if you prefer
 
 export default function RootLayout({ children }) {
   return (
@@ -18,6 +19,9 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <MantineProvider>
+          {/* This component will display all our notifications */}
+          <Notifications position="top-right" /> 
+          
           <nav style={{ padding: '1rem', borderBottom: '1px solid #ddd', marginBottom: '1rem', backgroundColor: '#fff' }}>
             <Link href="/" style={{ marginRight: '1rem', textDecoration: 'none', color: 'blue' }}>Inventory</Link>
             <Link href="/pos" style={{ marginRight: '1rem', textDecoration: 'none', color: 'blue' }}>Point of Sale</Link>

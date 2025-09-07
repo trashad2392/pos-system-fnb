@@ -1,100 +1,114 @@
 {
   "modifierGroups": [
     {
-      "name": "Milk Options",
+      "name": "Coffee Milk Options",
       "minSelection": 1,
-      "maxSelection": 1,
+      "selectionBudget": 1,
       "options": [
-        { "name": "Whole Milk", "priceAdjustment": 0.00 },
-        { "name": "Skim Milk", "priceAdjustment": 0.00 },
-        { "name": "Oat Milk", "priceAdjustment": 0.75 },
-        { "name": "Almond Milk", "priceAdjustment": 0.75 }
+        { "name": "Whole Milk", "priceAdjustment": 0.00, "selectionCost": 1 },
+        { "name": "Skim Milk", "priceAdjustment": 0.00, "selectionCost": 1 },
+        { "name": "Oat Milk", "priceAdjustment": 0.75, "selectionCost": 1 },
+        { "name": "Almond Milk", "priceAdjustment": 0.75, "selectionCost": 1 }
       ]
     },
     {
-      "name": "Espresso Options",
+      "name": "Syrup Flavors (Optional)",
+      "minSelection": 0,
+      "selectionBudget": 1,
+      "options": [
+        { "name": "Vanilla Syrup", "priceAdjustment": 0.50, "selectionCost": 1 },
+        { "name": "Caramel Syrup", "priceAdjustment": 0.50, "selectionCost": 1 },
+        { "name": "Hazelnut Syrup", "priceAdjustment": 0.50, "selectionCost": 1 }
+      ]
+    },
+    {
+      "name": "Steak Cooking Level",
       "minSelection": 1,
-      "maxSelection": 1,
+      "selectionBudget": 1,
       "options": [
-        { "name": "Single Shot", "priceAdjustment": 0.00 },
-        { "name": "Double Shot", "priceAdjustment": 1.00 }
+        { "name": "Rare", "priceAdjustment": 0.00, "selectionCost": 1 },
+        { "name": "Medium-Rare", "priceAdjustment": 0.00, "selectionCost": 1 },
+        { "name": "Medium", "priceAdjustment": 0.00, "selectionCost": 1 },
+        { "name": "Well-Done", "priceAdjustment": 0.00, "selectionCost": 1 }
       ]
     },
     {
-      "name": "Syrup Flavors",
-      "minSelection": 0,
-      "maxSelection": 1,
+      "name": "Fillet Sides (Budget of 2)",
+      "minSelection": 1,
+      "selectionBudget": 2,
       "options": [
-        { "name": "Vanilla Syrup", "priceAdjustment": 0.50 },
-        { "name": "Caramel Syrup", "priceAdjustment": 0.50 },
-        { "name": "Hazelnut Syrup", "priceAdjustment": 0.50 }
+        { "name": "French Fries", "priceAdjustment": 0.00, "selectionCost": 1 },
+        { "name": "Mashed Potatoes", "priceAdjustment": 0.00, "selectionCost": 1 },
+        { "name": "Side Salad", "priceAdjustment": 0.00, "selectionCost": 1 },
+        { "name": "Pasta", "priceAdjustment": 2.50, "selectionCost": 2 },
+        { "name": "Risotto", "priceAdjustment": 3.00, "selectionCost": 2 }
       ]
     },
     {
-      "name": "Sandwich Add-ons",
+      "name": "Pizza Toppings (Budget of 4)",
       "minSelection": 0,
-      "maxSelection": 3,
+      "selectionBudget": 4,
       "options": [
-        { "name": "Avocado", "priceAdjustment": 2.00 },
-        { "name": "Bacon", "priceAdjustment": 1.50 },
-        { "name": "Extra Cheese", "priceAdjustment": 1.00 }
+        { "name": "Mushrooms", "priceAdjustment": 1.00, "selectionCost": 1 },
+        { "name": "Onions", "priceAdjustment": 1.00, "selectionCost": 1 },
+        { "name": "Olives", "priceAdjustment": 1.00, "selectionCost": 1 },
+        { "name": "Extra Cheese", "priceAdjustment": 1.50, "selectionCost": 1 },
+        { "name": "Pepperoni", "priceAdjustment": 2.00, "selectionCost": 2 },
+        { "name": "Prosciutto", "priceAdjustment": 3.00, "selectionCost": 2 }
       ]
     }
   ],
   "categories": [
     {
-      "name": "Hot Coffees",
+      "name": "Main Courses",
+      "sku": "MAIN",
+      "products": [
+        {
+          "name": "Beef Fillet",
+          "sku": "MAIN-FILLET",
+          "price": 28.00,
+          "modifierGroups": ["Steak Cooking Level", "Fillet Sides (Budget of 2)"]
+        },
+        {
+          "name": "Margherita Pizza",
+          "sku": "MAIN-PIZZA",
+          "price": 14.00,
+          "modifierGroups": ["Pizza Toppings (Budget of 4)"]
+        }
+      ]
+    },
+    {
+      "name": "Hot Drinks",
+      "sku": "DRINK-HOT",
       "products": [
         {
           "name": "Latte",
-          "sku": "COF-LAT",
+          "sku": "HOT-LATTE",
           "price": 4.50,
-          "modifierGroups": ["Milk Options", "Espresso Options", "Syrup Flavors"]
+          "modifierGroups": ["Coffee Milk Options", "Syrup Flavors (Optional)"]
         },
         {
-          "name": "Cappuccino",
-          "sku": "COF-CAP",
-          "price": 4.25,
-          "modifierGroups": ["Milk Options", "Espresso Options"]
-        },
-        {
-          "name": "Americano",
-          "sku": "COF-AME",
-          "price": 3.50,
-          "modifierGroups": ["Espresso Options"]
-        }
-      ]
-    },
-    {
-      "name": "Sandwiches",
-      "products": [
-        {
-          "name": "Turkey Club",
-          "sku": "SAN-TUR",
-          "price": 9.50,
-          "modifierGroups": ["Sandwich Add-ons"]
-        },
-        {
-          "name": "Veggie Delight",
-          "sku": "SAN-VEG",
-          "price": 8.00,
-          "modifierGroups": ["Sandwich Add-ons"]
-        }
-      ]
-    },
-    {
-      "name": "Pastries",
-      "products": [
-        {
-          "name": "Croissant",
-          "sku": "PAS-CRO",
+          "name": "Espresso",
+          "sku": "HOT-ESP",
           "price": 3.00,
+          "modifierGroups": []
+        }
+      ]
+    },
+    {
+      "name": "Cold Drinks",
+      "sku": "DRINK-COLD",
+      "products": [
+        {
+          "name": "Iced Tea",
+          "sku": "COLD-TEA",
+          "price": 3.50,
           "modifierGroups": []
         },
         {
-          "name": "Blueberry Muffin",
-          "sku": "PAS-MUF",
-          "price": 3.25,
+          "name": "Bottled Water",
+          "sku": "COLD-H2O",
+          "price": 2.00,
           "modifierGroups": []
         }
       ]
