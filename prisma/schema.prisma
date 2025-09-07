@@ -16,7 +16,7 @@ datasource db {
 model Category {
   id        Int       @id @default(autoincrement())
   name      String    @unique
-  sku       String    @unique @default(uuid()) // <-- ADDED
+  sku       String    @unique @default(uuid())
   products  Product[]
 }
 
@@ -51,7 +51,7 @@ model ModifierOption {
   selectionCost   Int      @default(1) // <-- ADDED
   
   modifierGroupId Int
-  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id])
+  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
   orderItems      OrderItem[] @relation("OrderItemModifiers")
 }
 

@@ -17,28 +17,40 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
     }
   }, [product]);
 
-  // Recalculate total price and validate selections whenever they change
+  // Recalculate everything whenever selections change
   useEffect(() => {
     if (!product) return;
 
     let newTotal = product.price;
-    let allGroupsValid = true;
+    let allRequiredGroupsMet = true;
+    let totalPointsUsedInGroups = {};
 
+    // First, calculate total price and points used for each group
     for (const group of product.modifierGroups) {
+      totalPointsUsedInGroups[group.id] = 0;
       const groupSelections = selections[group.id] || [];
-      if (groupSelections.length < group.minSelection) {
-        allGroupsValid = false;
-      }
       for (const optionId of groupSelections) {
         const option = group.options.find(opt => opt.id === optionId);
         if (option) {
           newTotal += option.priceAdjustment;
+          totalPointsUsedInGroups[group.id] += option.selectionCost;
         }
       }
     }
 
+    // Then, validate if all requirements are met
+    for (const group of product.modifierGroups) {
+        const numSelected = (selections[group.id] || []).length;
+        if (numSelected < group.minSelection) {
+            allRequiredGroupsMet = false;
+        }
+        if (totalPointsUsedInGroups[group.id] > group.selectionBudget) {
+            allRequiredGroupsMet = false; // Should not happen due to UI disabling, but good for safety
+        }
+    }
+
     setTotalPrice(newTotal);
-    setIsValid(allGroupsValid);
+    setIsValid(allRequiredGroupsMet);
   }, [selections, product]);
 
   const handleSelectionChange = (groupId, optionId) => {
@@ -49,23 +61,36 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
       let newGroupSelections;
 
       if (isSelected) {
+        // If it's selected, deselect it
         newGroupSelections = currentGroupSelections.filter(id => id !== optionId);
       } else {
-        if (group.maxSelection === 1) {
-          newGroupSelections = [optionId];
-        } else {
-          if (currentGroupSelections.length < group.maxSelection) {
+        // If it's not selected, try to select it
+        const optionToAdd = group.options.find(opt => opt.id === optionId);
+        if (!optionToAdd) return currentSelections; // Should not happen
+
+        let pointsUsed = 0;
+        currentGroupSelections.forEach(id => {
+          const opt = group.options.find(o => o.id === id);
+          if (opt) pointsUsed += opt.selectionCost;
+        });
+        
+        // Only add if it doesn't exceed the budget
+        if (pointsUsed + optionToAdd.selectionCost <= group.selectionBudget) {
             newGroupSelections = [...currentGroupSelections, optionId];
-          } else {
-            newGroupSelections = currentGroupSelections;
-          }
+        } else {
+            // If budget is 1, deselect others and select this one
+            if (group.selectionBudget === 1 && optionToAdd.selectionCost === 1) {
+              newGroupSelections = [optionId];
+            } else {
+              newGroupSelections = currentGroupSelections; // Do nothing if it exceeds budget
+            }
         }
       }
       
       return { ...currentSelections, [groupId]: newGroupSelections };
     });
   };
-
+  
   const handleConfirm = () => {
     const allSelectedOptionIds = Object.values(selections).flat();
     onConfirm(product, allSelectedOptionIds);
@@ -77,38 +102,52 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
   return (
     <Modal opened={opened} onClose={onClose} title={`Customize ${product.name}`} size="lg">
       <ScrollArea style={{ height: '60vh' }}>
-        {product.modifierGroups.map(group => (
-          <Box key={group.id} mb="md">
-            <Title order={4}>{group.name}</Title>
-            <Text size="sm" c="dimmed">
-              {group.minSelection === 0 && group.maxSelection > 1 ? `Choose up to ${group.maxSelection}` :
-               group.minSelection === group.maxSelection ? `Choose exactly ${group.minSelection}` :
-               `Choose between ${group.minSelection} and ${group.maxSelection}`
-              }
-            </Text>
-            <Divider my="xs" />
-            
-            <Group mt="xs" gap="md">
-              {group.options.map(option => {
-                const isSelected = selections[group.id]?.includes(option.id);
-                return (
-                  <Chip
-                    key={option.id}
-                    value={option.id.toString()}
-                    checked={isSelected}
-                    onChange={() => handleSelectionChange(group.id, option.id)}
-                    variant="outline"
-                    // --- UPDATED STYLING ---
-                    size="lg"      // Makes the text and overall size larger
-                    radius="md"     // Makes the corners rounded, not a full pill
-                  >
-                    {option.name} {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
-                  </Chip>
-                );
-              })}
-            </Group>
-          </Box>
-        ))}
+        {product.modifierGroups.map(group => {
+          // Calculate current points used for this group
+          let pointsUsed = 0;
+          if (selections[group.id]) {
+            selections[group.id].forEach(optionId => {
+              const option = group.options.find(opt => opt.id === optionId);
+              if (option) pointsUsed += option.selectionCost;
+            });
+          }
+
+          return (
+            <Box key={group.id} mb="md">
+              <Group justify="space-between">
+                <Title order={4}>{group.name}</Title>
+                <Text size="sm" c="dimmed">Points used: {pointsUsed} / {group.selectionBudget}</Text>
+              </Group>
+              <Text size="sm" c="dimmed">
+                Choose at least {group.minSelection}. Use up to {group.selectionBudget} points.
+              </Text>
+              <Divider my="xs" />
+              
+              <Group mt="xs" gap="md">
+                {group.options.map(option => {
+                  const isSelected = selections[group.id]?.includes(option.id);
+                  // An option is disabled if it's NOT selected AND adding it would exceed the budget
+                  const isDisabled = !isSelected && (pointsUsed + option.selectionCost > group.selectionBudget);
+
+                  return (
+                    <Chip
+                      key={option.id}
+                      value={option.id.toString()}
+                      checked={isSelected}
+                      onChange={() => handleSelectionChange(group.id, option.id)}
+                      variant="outline"
+                      size="lg"
+                      radius="md"
+                      disabled={isDisabled}
+                    >
+                      {option.name} ({option.selectionCost}pt) {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
+                    </Chip>
+                  );
+                })}
+              </Group>
+            </Box>
+          );
+        })}
       </ScrollArea>
       <Divider my="sm" />
       <Group justify="space-between" align="center" mt="md">

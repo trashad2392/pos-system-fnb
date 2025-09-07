@@ -12,11 +12,17 @@ export default function ModifierManager({ modifierGroups, onDataChanged }) {
   const [optionModalOpened, { open: openOptionModal, close: closeOptionModal }] = useDisclosure(false);
 
   const handleGroupSave = async () => {
-    if (Number(editingGroup.minSelection) > Number(editingGroup.maxSelection)) {
-      alert('Error: Minimum selections cannot be greater than maximum selections.');
+    // UPDATED: Check minSelection against selectionBudget
+    if (Number(editingGroup.minSelection) > Number(editingGroup.selectionBudget)) {
+      alert('Error: Minimum selections cannot be greater than the selection budget.');
       return;
     }
-    const data = { name: editingGroup.name, minSelection: Number(editingGroup.minSelection), maxSelection: Number(editingGroup.maxSelection) };
+    // UPDATED: Include selectionBudget in the data payload
+    const data = { 
+      name: editingGroup.name, 
+      minSelection: Number(editingGroup.minSelection), 
+      selectionBudget: Number(editingGroup.selectionBudget) 
+    };
     try {
       if (editingGroup.id) { await window.api.updateModifierGroup(editingGroup.id, data); } 
       else { await window.api.addModifierGroup(data); }
@@ -33,7 +39,13 @@ export default function ModifierManager({ modifierGroups, onDataChanged }) {
   };
 
   const handleOptionSave = async () => {
-    const data = { name: editingOption.name, priceAdjustment: Number(editingOption.priceAdjustment), modifierGroupId: editingOption.modifierGroupId };
+    // UPDATED: Include selectionCost in the data payload
+    const data = { 
+      name: editingOption.name, 
+      priceAdjustment: Number(editingOption.priceAdjustment), 
+      selectionCost: Number(editingOption.selectionCost),
+      modifierGroupId: editingOption.modifierGroupId 
+    };
     try {
       if (editingOption.id) { await window.api.updateModifierOption(editingOption.id, data); } 
       else { await window.api.addModifierOption(data); }
@@ -53,7 +65,8 @@ export default function ModifierManager({ modifierGroups, onDataChanged }) {
     <Paper shadow="xs" p="md" withBorder>
       <Group justify="space-between" mb="md">
         <Title order={3}>Modifier Groups</Title>
-        <Button onClick={() => { setEditingGroup({ name: '', minSelection: 1, maxSelection: 1 }); openGroupModal(); }} leftSection={<IconPlus size={16} />}>New Group</Button>
+        {/* UPDATED: Default selectionBudget */}
+        <Button onClick={() => { setEditingGroup({ name: '', minSelection: 1, selectionBudget: 1 }); openGroupModal(); }} leftSection={<IconPlus size={16} />}>New Group</Button>
       </Group>
       <Accordion variant="separated">
         {modifierGroups.map(group => (
@@ -66,12 +79,25 @@ export default function ModifierManager({ modifierGroups, onDataChanged }) {
               </Group>
             </Group>
             <Accordion.Panel>
-              <Button size="xs" variant="light" mb="sm" onClick={() => { setEditingOption({ name: '', priceAdjustment: 0, modifierGroupId: group.id }); openOptionModal(); }}>Add Option</Button>
+              {/* UPDATED: Default selectionCost */}
+              <Button size="xs" variant="light" mb="sm" onClick={() => { setEditingOption({ name: '', priceAdjustment: 0, selectionCost: 1, modifierGroupId: group.id }); openOptionModal(); }}>Add Option</Button>
               <Table striped withTableBorder fontSize="sm">
-                <Table.Thead><Table.Tr><Table.Th>Option Name</Table.Th><Table.Th>Price Adj.</Table.Th><Table.Th>Actions</Table.Th></Table.Tr></Table.Thead>
+                <Table.Thead><Table.Tr>
+                  <Table.Th>Option Name</Table.Th>
+                  <Table.Th>Price Adj.</Table.Th>
+                  {/* ADDED: New column header */}
+                  <Table.Th>Selection Points</Table.Th>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr></Table.Thead>
                 <Table.Tbody>
                   {group.options.map(option => (
-                    <Table.Tr key={option.id}><Table.Td>{option.name}</Table.Td><Table.Td>${Number(option.priceAdjustment).toFixed(2)}</Table.Td><Table.Td><Group gap="xs"><ActionIcon variant="subtle" onClick={() => { setEditingOption(option); openOptionModal(); }}><IconEdit size={14} /></ActionIcon><ActionIcon color="red" variant="subtle" onClick={() => handleOptionDelete(option.id)}><IconTrash size={14} /></ActionIcon></Group></Table.Td></Table.Tr>
+                    <Table.Tr key={option.id}>
+                      <Table.Td>{option.name}</Table.Td>
+                      <Table.Td>${Number(option.priceAdjustment).toFixed(2)}</Table.Td>
+                      {/* ADDED: New column data */}
+                      <Table.Td>{option.selectionCost}</Table.Td>
+                      <Table.Td><Group gap="xs"><ActionIcon variant="subtle" onClick={() => { setEditingOption(option); openOptionModal(); }}><IconEdit size={14} /></ActionIcon><ActionIcon color="red" variant="subtle" onClick={() => handleOptionDelete(option.id)}><IconTrash size={14} /></ActionIcon></Group></Table.Td>
+                    </Table.Tr>
                   ))}
                 </Table.Tbody>
               </Table>
@@ -82,8 +108,9 @@ export default function ModifierManager({ modifierGroups, onDataChanged }) {
       <Modal opened={groupModalOpened} onClose={closeGroupModal} title={editingGroup?.id ? 'Edit Group' : 'Add New Group'}>
         <Box>
           <TextInput label="Group Name" placeholder="e.g., Pizza Toppings" required value={editingGroup?.name || ''} onChange={(e) => setEditingGroup({...editingGroup, name: e.target.value})} />
-          <NumberInput mt="md" label="Minimum Selections" required value={editingGroup?.minSelection === undefined ? 0 : editingGroup.minSelection} onChange={(val) => setEditingGroup({...editingGroup, minSelection: val || 0})} min={0} max={editingGroup?.maxSelection} />
-          <NumberInput mt="md" label="Maximum Selections" required value={editingGroup?.maxSelection === undefined ? 1 : editingGroup.maxSelection} onChange={(val) => setEditingGroup({...editingGroup, maxSelection: val || 1})} min={editingGroup?.minSelection} />
+          <NumberInput mt="md" label="Minimum Selections" required value={editingGroup?.minSelection === undefined ? 0 : editingGroup.minSelection} onChange={(val) => setEditingGroup({...editingGroup, minSelection: val || 0})} min={0} max={editingGroup?.selectionBudget} />
+          {/* UPDATED: Changed from maxSelection to selectionBudget */}
+          <NumberInput mt="md" label="Selection Budget (Points)" required value={editingGroup?.selectionBudget === undefined ? 1 : editingGroup.selectionBudget} onChange={(val) => setEditingGroup({...editingGroup, selectionBudget: val || 1})} min={editingGroup?.minSelection} />
           <Group justify="flex-end" mt="xl"><Button variant="default" onClick={closeGroupModal}>Cancel</Button><Button onClick={handleGroupSave}>Save Group</Button></Group>
         </Box>
       </Modal>
@@ -91,6 +118,8 @@ export default function ModifierManager({ modifierGroups, onDataChanged }) {
         <Box>
           <TextInput label="Option Name" placeholder="e.g., Extra Cheese" required value={editingOption?.name || ''} onChange={(e) => setEditingOption({...editingOption, name: e.target.value})} />
           <NumberInput mt="md" label="Price Adjustment" defaultValue={0} precision={2} step={0.50} value={editingOption?.priceAdjustment || 0} onChange={(val) => setEditingOption({...editingOption, priceAdjustment: val || 0})} />
+          {/* ADDED: New input for selectionCost */}
+          <NumberInput mt="md" label="Selection Cost (Points)" defaultValue={1} min={0} step={1} value={editingOption?.selectionCost || 1} onChange={(val) => setEditingOption({...editingOption, selectionCost: val === undefined ? 1 : val})} />
           <Group justify="flex-end" mt="xl"><Button variant="default" onClick={closeOptionModal}>Cancel</Button><Button onClick={handleOptionSave}>Save Option</Button></Group>
         </Box>
       </Modal>

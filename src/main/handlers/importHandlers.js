@@ -22,6 +22,7 @@ function setupImportHandlers() {
   ipcMain.handle('import-menu-from-json', async (e, jsonContent) => {
     const data = JSON.parse(jsonContent);
     await prisma.$transaction(async (tx) => {
+      // Clear existing menu data
       await tx.orderItem.deleteMany({});
       await tx.product.deleteMany({});
       await tx.modifierOption.deleteMany({});
@@ -29,25 +30,40 @@ function setupImportHandlers() {
       await tx.category.deleteMany({});
       
       const groupMap = new Map();
+
+      // Create Modifier Groups and their Options
       if (data.modifierGroups) {
         for (const group of data.modifierGroups) {
           const newGroup = await tx.modifierGroup.create({
             data: {
-              name: group.name, minSelection: group.minSelection,
-              maxSelection: group.maxSelection, options: { create: group.options },
+              name: group.name,
+              minSelection: group.minSelection,
+              selectionBudget: group.selectionBudget, // UPDATED: from maxSelection
+              options: {
+                create: group.options.map(opt => ({ // UPDATED: to include selectionCost
+                  name: opt.name,
+                  priceAdjustment: opt.priceAdjustment,
+                  selectionCost: opt.selectionCost,
+                })),
+              },
             },
           });
           groupMap.set(group.name, newGroup.id);
         }
       }
+
+      // Create Categories and their Products
       if (data.categories) {
         for (const category of data.categories) {
           await tx.category.create({
             data: {
               name: category.name,
+              sku: category.sku,
               products: {
                 create: category.products.map(prod => ({
-                  name: prod.name, sku: prod.sku, price: prod.price,
+                  name: prod.name,
+                  sku: prod.sku,
+                  price: prod.price,
                   modifierGroups: {
                     connect: prod.modifierGroups.map(groupName => ({ id: groupMap.get(groupName) }))
                   }
