@@ -23,6 +23,7 @@ function setupImportHandlers() {
     const data = JSON.parse(jsonContent);
     await prisma.$transaction(async (tx) => {
       // Clear existing menu data
+      await tx.productModifierGroup.deleteMany({});
       await tx.orderItem.deleteMany({});
       await tx.product.deleteMany({});
       await tx.modifierOption.deleteMany({});
@@ -31,16 +32,15 @@ function setupImportHandlers() {
       
       const groupMap = new Map();
 
-      // Create Modifier Groups and their Options
       if (data.modifierGroups) {
         for (const group of data.modifierGroups) {
           const newGroup = await tx.modifierGroup.create({
             data: {
               name: group.name,
               minSelection: group.minSelection,
-              selectionBudget: group.selectionBudget, // UPDATED: from maxSelection
+              selectionBudget: group.selectionBudget,
               options: {
-                create: group.options.map(opt => ({ // UPDATED: to include selectionCost
+                create: group.options.map(opt => ({
                   name: opt.name,
                   priceAdjustment: opt.priceAdjustment,
                   selectionCost: opt.selectionCost,
@@ -52,25 +52,34 @@ function setupImportHandlers() {
         }
       }
 
-      // Create Categories and their Products
       if (data.categories) {
         for (const category of data.categories) {
-          await tx.category.create({
+          const createdCategory = await tx.category.create({
             data: {
               name: category.name,
               sku: category.sku,
-              products: {
-                create: category.products.map(prod => ({
-                  name: prod.name,
-                  sku: prod.sku,
-                  price: prod.price,
-                  modifierGroups: {
-                    connect: prod.modifierGroups.map(groupName => ({ id: groupMap.get(groupName) }))
-                  }
-                }))
-              }
             }
           });
+
+          for (const prod of category.products) {
+            const createdProduct = await tx.product.create({
+              data: {
+                name: prod.name,
+                sku: prod.sku,
+                price: prod.price,
+                categoryId: createdCategory.id,
+              }
+            });
+
+            if (prod.modifierGroups && prod.modifierGroups.length > 0) {
+              const links = prod.modifierGroups.map((groupName, index) => ({
+                productId: createdProduct.id,
+                modifierGroupId: groupMap.get(groupName),
+                displayOrder: index,
+              }));
+              await tx.productModifierGroup.createMany({ data: links });
+            }
+          }
         }
       }
     });

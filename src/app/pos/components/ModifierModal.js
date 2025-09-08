@@ -1,160 +1,193 @@
 // src/app/pos/components/ModifierModal.js
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Modal, Title, Text, Button, Group, Divider, ScrollArea, Box, Chip } from '@mantine/core';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Modal, Title, Text, Button, Group, Divider, Box, Chip, Progress } from '@mantine/core';
 
 export default function ModifierModal({ product, opened, onClose, onConfirm }) {
+  const [currentStep, setCurrentStep] = useState(0);
   const [selections, setSelections] = useState({});
   const [totalPrice, setTotalPrice] = useState(0);
-  const [isValid, setIsValid] = useState(false);
 
-  // Reset state and calculate initial price whenever a new product is passed in
-  useEffect(() => {
-    if (product) {
-      setTotalPrice(product.price);
-      setSelections({});
-    }
+  const sortedModifierGroups = useMemo(() => {
+    if (!product || !product.modifierGroups) return [];
+    return product.modifierGroups.map(pmg => pmg.modifierGroup);
   }, [product]);
 
-  // Recalculate everything whenever selections change
+  useEffect(() => {
+    if (opened && product) {
+      setCurrentStep(0);
+      setSelections({});
+      setTotalPrice(product.price);
+    }
+  }, [opened, product]);
+
+  const handleConfirm = useCallback(() => {
+    const allSelectedOptionIds = Object.values(selections).flat();
+    onConfirm(product, allSelectedOptionIds);
+  }, [selections, product, onConfirm]);
+
+  useEffect(() => {
+    if (!opened || !sortedModifierGroups || sortedModifierGroups.length === 0) return;
+
+    const currentGroup = sortedModifierGroups[currentStep];
+    if (!currentGroup) return;
+    
+    const isOptional = currentGroup.minSelection === 0;
+    const currentGroupSelections = selections[currentGroup.id] || [];
+    
+    if (isOptional && currentGroupSelections.length === 0) {
+        return;
+    }
+    
+    const pointsUsed = currentGroupSelections.reduce((sum, optionId) => {
+        const option = currentGroup.options.find(opt => opt.id === optionId);
+        return sum + (option ? option.selectionCost : 0);
+    }, 0);
+
+    const isMinItemsMet = currentGroupSelections.length >= currentGroup.minSelection;
+    const isBudgetFilled = pointsUsed >= currentGroup.selectionBudget;
+
+    if (isMinItemsMet && (isBudgetFilled || isOptional)) {
+      const isFinalStep = currentStep === sortedModifierGroups.length - 1;
+      
+      if (isFinalStep) {
+        const timer = setTimeout(() => handleConfirm(), 300); 
+        return () => clearTimeout(timer);
+      } else {
+        const timer = setTimeout(() => setCurrentStep(s => s + 1), 300);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [selections, currentStep, opened, sortedModifierGroups, handleConfirm]);
+  
   useEffect(() => {
     if (!product) return;
-
     let newTotal = product.price;
-    let allRequiredGroupsMet = true;
-    let totalPointsUsedInGroups = {};
-
-    // First, calculate total price and points used for each group
-    for (const group of product.modifierGroups) {
-      totalPointsUsedInGroups[group.id] = 0;
-      const groupSelections = selections[group.id] || [];
-      for (const optionId of groupSelections) {
+    Object.values(selections).flat().forEach(optionId => {
+      for (const group of sortedModifierGroups) {
         const option = group.options.find(opt => opt.id === optionId);
         if (option) {
           newTotal += option.priceAdjustment;
-          totalPointsUsedInGroups[group.id] += option.selectionCost;
+          break; 
         }
       }
-    }
-
-    // Then, validate if all requirements are met
-    for (const group of product.modifierGroups) {
-        const numSelected = (selections[group.id] || []).length;
-        if (numSelected < group.minSelection) {
-            allRequiredGroupsMet = false;
-        }
-        if (totalPointsUsedInGroups[group.id] > group.selectionBudget) {
-            allRequiredGroupsMet = false; // Should not happen due to UI disabling, but good for safety
-        }
-    }
-
+    });
     setTotalPrice(newTotal);
-    setIsValid(allRequiredGroupsMet);
-  }, [selections, product]);
+  }, [selections, product, sortedModifierGroups]);
+
 
   const handleSelectionChange = (groupId, optionId) => {
     setSelections(currentSelections => {
-      const group = product.modifierGroups.find(g => g.id === groupId);
+      const group = sortedModifierGroups.find(g => g.id === groupId);
       const currentGroupSelections = currentSelections[groupId] || [];
       const isSelected = currentGroupSelections.includes(optionId);
       let newGroupSelections;
 
       if (isSelected) {
-        // If it's selected, deselect it
         newGroupSelections = currentGroupSelections.filter(id => id !== optionId);
       } else {
-        // If it's not selected, try to select it
         const optionToAdd = group.options.find(opt => opt.id === optionId);
-        if (!optionToAdd) return currentSelections; // Should not happen
+        if (!optionToAdd) return currentSelections;
 
-        let pointsUsed = 0;
-        currentGroupSelections.forEach(id => {
+        let pointsUsed = currentGroupSelections.reduce((sum, id) => {
           const opt = group.options.find(o => o.id === id);
-          if (opt) pointsUsed += opt.selectionCost;
-        });
+          return sum + (opt ? opt.selectionCost : 0);
+        }, 0);
         
-        // Only add if it doesn't exceed the budget
         if (pointsUsed + optionToAdd.selectionCost <= group.selectionBudget) {
-            newGroupSelections = [...currentGroupSelections, optionId];
+          newGroupSelections = [...currentGroupSelections, optionId];
         } else {
-            // If budget is 1, deselect others and select this one
-            if (group.selectionBudget === 1 && optionToAdd.selectionCost === 1) {
-              newGroupSelections = [optionId];
-            } else {
-              newGroupSelections = currentGroupSelections; // Do nothing if it exceeds budget
-            }
+          if (group.selectionBudget === 1 && optionToAdd.selectionCost === 1) {
+            newGroupSelections = [optionId];
+          } else {
+            newGroupSelections = currentGroupSelections;
+          }
         }
       }
-      
       return { ...currentSelections, [groupId]: newGroupSelections };
     });
   };
   
-  const handleConfirm = () => {
-    const allSelectedOptionIds = Object.values(selections).flat();
-    onConfirm(product, allSelectedOptionIds);
-    onClose();
+  // This button now handles both skipping and finishing
+  const handleNextOrFinish = () => {
+    const isFinalStep = currentStep === sortedModifierGroups.length - 1;
+    if (isFinalStep) {
+        handleConfirm();
+    } else {
+        setCurrentStep(s => s + 1);
+    }
   };
 
-  if (!product) return null;
+  if (!product || !opened || sortedModifierGroups.length === 0) return null;
+  const currentGroup = sortedModifierGroups[currentStep];
+  if (!currentGroup) return null;
+  
+  const currentGroupSelections = selections[currentGroup.id] || [];
+  const pointsUsed = currentGroupSelections.reduce((sum, optionId) => {
+    const option = currentGroup.options.find(opt => opt.id === optionId);
+    return sum + (option ? option.selectionCost : 0);
+  }, 0);
+
+  const isFinalStep = currentStep === sortedModifierGroups.length - 1;
+  const showOptionalButton = currentGroup.minSelection === 0 && currentGroupSelections.length === 0;
 
   return (
-    <Modal opened={opened} onClose={onClose} title={`Customize ${product.name}`} size="lg">
-      <ScrollArea style={{ height: '60vh' }}>
-        {product.modifierGroups.map(group => {
-          // Calculate current points used for this group
-          let pointsUsed = 0;
-          if (selections[group.id]) {
-            selections[group.id].forEach(optionId => {
-              const option = group.options.find(opt => opt.id === optionId);
-              if (option) pointsUsed += option.selectionCost;
-            });
-          }
+    <Modal 
+      opened={opened} 
+      onClose={onClose} 
+      title={`Customize ${product.name}`} 
+      size="lg" 
+      withCloseButton={false}
+      closeOnClickOutside={false}
+      closeOnEscape={false}
+    >
+      <Progress value={((currentStep + 1) / sortedModifierGroups.length) * 100} mb="md" />
+      
+      <Box style={{ minHeight: '50vh', position: 'relative' }}>
+          <Box key={currentGroup.id}>
+            <Group justify="space-between">
+              <Title order={4}>{currentGroup.name}</Title>
+              <Text size="sm" c="dimmed">Points used: {pointsUsed} / {currentGroup.selectionBudget}</Text>
+            </Group>
+            <Text size="sm" c="dimmed">
+              Choose at least {currentGroup.minSelection}. Use up to {currentGroup.selectionBudget} points.
+            </Text>
+            <Divider my="md" />
+            
+            <Group mt="xs" gap="md">
+              {currentGroup.options.map(option => {
+                const isSelected = currentGroupSelections.includes(option.id);
+                const isDisabled = !isSelected && (pointsUsed + option.selectionCost > currentGroup.selectionBudget);
 
-          return (
-            <Box key={group.id} mb="md">
-              <Group justify="space-between">
-                <Title order={4}>{group.name}</Title>
-                <Text size="sm" c="dimmed">Points used: {pointsUsed} / {group.selectionBudget}</Text>
-              </Group>
-              <Text size="sm" c="dimmed">
-                Choose at least {group.minSelection}. Use up to {group.selectionBudget} points.
-              </Text>
-              <Divider my="xs" />
-              
-              <Group mt="xs" gap="md">
-                {group.options.map(option => {
-                  const isSelected = selections[group.id]?.includes(option.id);
-                  // An option is disabled if it's NOT selected AND adding it would exceed the budget
-                  const isDisabled = !isSelected && (pointsUsed + option.selectionCost > group.selectionBudget);
+                return (
+                  <Chip
+                    key={option.id}
+                    value={option.id.toString()}
+                    checked={isSelected}
+                    onChange={() => handleSelectionChange(currentGroup.id, option.id)}
+                    variant="outline"
+                    size="lg"
+                    radius="md"
+                    disabled={isDisabled}
+                  >
+                    {option.name} ({option.selectionCost}pt) {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
+                  </Chip>
+                );
+              })}
+            </Group>
+          </Box>
+      </Box>
 
-                  return (
-                    <Chip
-                      key={option.id}
-                      value={option.id.toString()}
-                      checked={isSelected}
-                      onChange={() => handleSelectionChange(group.id, option.id)}
-                      variant="outline"
-                      size="lg"
-                      radius="md"
-                      disabled={isDisabled}
-                    >
-                      {option.name} ({option.selectionCost}pt) {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
-                    </Chip>
-                  );
-                })}
-              </Group>
-            </Box>
-          );
-        })}
-      </ScrollArea>
       <Divider my="sm" />
       <Group justify="space-between" align="center" mt="md">
-        <Title order={3}>Total Price: ${totalPrice.toFixed(2)}</Title>
+        <Title order={3}>Total: ${totalPrice.toFixed(2)}</Title>
         <Group>
-          <Button variant="default" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleConfirm} disabled={!isValid}>Add to Order</Button>
+            {showOptionalButton && (
+                <Button variant="outline" onClick={handleNextOrFinish}>
+                    {isFinalStep ? 'Finish' : 'Skip'}
+                </Button>
+            )}
         </Group>
       </Group>
     </Modal>

@@ -1,21 +1,20 @@
 // src/components/management/ProductManager.js
 "use client";
 import { useState } from 'react';
-import { Title, Box, TextInput, Table, Button, Paper, Group, ActionIcon, Modal, NumberInput, Text, Select, MultiSelect, Stack, Center } from '@mantine/core';
+import { Title, Box, TextInput, Table, Button, Paper, Group, ActionIcon, Modal, NumberInput, Text, Select } from '@mantine/core';
 import { IconSearch, IconEdit, IconArchive, IconArrowDown, IconArrowUp, IconX } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import AddProductForm from '@/components/AddProductForm';
 
-// Helper component for the re-orderable list
 function OrderedModifierList({ items, onMove, onRemove }) {
   if (!items || items.length === 0) {
     return <Text c="dimmed" ta="center" mt="sm">No modifier groups selected.</Text>;
   }
 
   return (
-    <Stack gap="xs" mt="sm">
+    <Box mt="sm">
       {items.map((item, index) => (
-        <Paper withBorder p="xs" key={item.modifierGroupId}>
+        <Paper withBorder p="xs" key={item.modifierGroupId} mb="xs">
           <Group justify="space-between">
             <Text>{item.modifierGroup.name}</Text>
             <Group gap="xs">
@@ -32,7 +31,7 @@ function OrderedModifierList({ items, onMove, onRemove }) {
           </Group>
         </Paper>
       ))}
-    </Stack>
+    </Box>
   );
 }
 
@@ -41,12 +40,9 @@ export default function ProductManager({ products, categories, modifierGroups, o
   const [searchQuery, setSearchQuery] = useState('');
   const [opened, { open, close }] = useDisclosure(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-
-  // ADDED: State to manage the ordered list of modifiers in the modal
   const [orderedModifiers, setOrderedModifiers] = useState([]);
 
   const handleEditClick = (product) => {
-    // The data from the backend now has a nested structure, so we map it.
     const initialOrderedModifiers = product.modifierGroups.map(pmg => ({
       modifierGroupId: pmg.modifierGroupId,
       modifierGroup: pmg.modifierGroup,
@@ -68,7 +64,6 @@ export default function ProductManager({ products, categories, modifierGroups, o
       const dataToUpdate = {
         name, sku, price,
         categoryId: parseInt(categoryId, 10),
-        // UPDATED: Send the ordered list of modifiers
         modifierGroups: orderedModifiers.map(om => ({ modifierGroupId: om.modifierGroupId })),
       };
       await window.api.updateProduct({ id, data: dataToUpdate });
@@ -83,13 +78,14 @@ export default function ProductManager({ products, categories, modifierGroups, o
     }
   };
 
-  // --- Functions to manage the ordered list ---
-  const handleAddModifier = (modifierGroupId) => {
-    if (!modifierGroupId || orderedModifiers.some(om => om.modifierGroupId === parseInt(modifierGroupId))) return;
+  const handleAddModifier = (modifierGroupIdStr) => {
+    if (!modifierGroupIdStr) return;
+    const modifierGroupId = parseInt(modifierGroupIdStr, 10);
+    if (orderedModifiers.some(om => om.modifierGroupId === modifierGroupId)) return;
     
-    const groupToAdd = modifierGroups.find(mg => mg.value === modifierGroupId);
+    const groupToAdd = modifierGroups.find(mg => parseInt(mg.value, 10) === modifierGroupId);
     if (groupToAdd) {
-      setOrderedModifiers(current => [...current, { modifierGroupId: parseInt(modifierGroupId), modifierGroup: { name: groupToAdd.label } }]);
+      setOrderedModifiers(current => [...current, { modifierGroupId, modifierGroup: { name: groupToAdd.label } }]);
     }
   };
 
@@ -112,7 +108,6 @@ export default function ProductManager({ products, categories, modifierGroups, o
   
   return (
     <>
-      {/* We will update this form in the next step to support ordering */}
       <AddProductForm onProductAdded={onDataChanged} categories={categories} modifierGroups={modifierGroups} />
       
       <Paper shadow="xs" p="md" withBorder mt="xl">
@@ -132,15 +127,14 @@ export default function ProductManager({ products, categories, modifierGroups, o
             <NumberInput mt="md" label="Price" required precision={2} min={0} value={Number(selectedProduct.price)} onChange={(v) => setSelectedProduct({ ...selectedProduct, price: v || 0 })}/>
             <Select mt="md" label="Category" required data={categories} value={selectedProduct.categoryId} onChange={(v) => setSelectedProduct({ ...selectedProduct, categoryId: v })} />
             
-            {/* --- UPDATED MODIFIER SECTION --- */}
             <Box mt="md">
               <Text fw={500}>Modifier Groups</Text>
               <Select
                 label="Add a modifier group"
                 placeholder="Search and select a group to add..."
-                data={modifierGroups}
+                data={modifierGroups.filter(mg => !orderedModifiers.some(om => om.modifierGroupId === parseInt(mg.value, 10)))}
                 onChange={handleAddModifier}
-                searchable // This makes the dropdown searchable!
+                searchable
                 clearable
               />
               <OrderedModifierList 
@@ -149,7 +143,6 @@ export default function ProductManager({ products, categories, modifierGroups, o
                 onRemove={handleRemoveModifier}
               />
             </Box>
-            {/* --- END UPDATED SECTION --- */}
 
             <Group justify="flex-end" mt="xl"><Button variant="default" onClick={close}>Cancel</Button><Button type="submit">Save Changes</Button></Group>
           </form>
