@@ -1,33 +1,75 @@
 // src/components/management/ProductManager.js
 "use client";
 import { useState } from 'react';
-import { Title, Box, TextInput, Table, Button, Paper, Group, ActionIcon, Modal, NumberInput, Text, Select, MultiSelect } from '@mantine/core';
-import { IconSearch, IconEdit, IconArchive, IconTrash } from '@tabler/icons-react';
+import { Title, Box, TextInput, Table, Button, Paper, Group, ActionIcon, Modal, NumberInput, Text, Select, MultiSelect, Stack, Center } from '@mantine/core';
+import { IconSearch, IconEdit, IconArchive, IconArrowDown, IconArrowUp, IconX } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import AddProductForm from '@/components/AddProductForm';
+
+// Helper component for the re-orderable list
+function OrderedModifierList({ items, onMove, onRemove }) {
+  if (!items || items.length === 0) {
+    return <Text c="dimmed" ta="center" mt="sm">No modifier groups selected.</Text>;
+  }
+
+  return (
+    <Stack gap="xs" mt="sm">
+      {items.map((item, index) => (
+        <Paper withBorder p="xs" key={item.modifierGroupId}>
+          <Group justify="space-between">
+            <Text>{item.modifierGroup.name}</Text>
+            <Group gap="xs">
+              <ActionIcon variant="default" onClick={() => onMove(index, 'up')} disabled={index === 0}>
+                <IconArrowUp size={16} />
+              </ActionIcon>
+              <ActionIcon variant="default" onClick={() => onMove(index, 'down')} disabled={index === items.length - 1}>
+                <IconArrowDown size={16} />
+              </ActionIcon>
+              <ActionIcon color="red" variant="light" onClick={() => onRemove(index)}>
+                <IconX size={16} />
+              </ActionIcon>
+            </Group>
+          </Group>
+        </Paper>
+      ))}
+    </Stack>
+  );
+}
+
 
 export default function ProductManager({ products, categories, modifierGroups, onDataChanged }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [opened, { open, close }] = useDisclosure(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
+  // ADDED: State to manage the ordered list of modifiers in the modal
+  const [orderedModifiers, setOrderedModifiers] = useState([]);
+
   const handleEditClick = (product) => {
+    // The data from the backend now has a nested structure, so we map it.
+    const initialOrderedModifiers = product.modifierGroups.map(pmg => ({
+      modifierGroupId: pmg.modifierGroupId,
+      modifierGroup: pmg.modifierGroup,
+    }));
+    setOrderedModifiers(initialOrderedModifiers);
+    
     setSelectedProduct({
       ...product,
       categoryId: product.categoryId.toString(),
-      modifierGroupIds: product.modifierGroups.map(mg => mg.id.toString())
     });
     open();
   };
 
   const handleUpdateProduct = async (event) => {
-    event.preventDefault(); if (!selectedProduct) return;
+    event.preventDefault();
+    if (!selectedProduct) return;
     try {
-      const { id, name, sku, price, categoryId, modifierGroupIds } = selectedProduct;
+      const { id, name, sku, price, categoryId } = selectedProduct;
       const dataToUpdate = {
         name, sku, price,
         categoryId: parseInt(categoryId, 10),
-        modifierGroupIds: modifierGroupIds.map(id => parseInt(id, 10))
+        // UPDATED: Send the ordered list of modifiers
+        modifierGroups: orderedModifiers.map(om => ({ modifierGroupId: om.modifierGroupId })),
       };
       await window.api.updateProduct({ id, data: dataToUpdate });
       onDataChanged();
@@ -41,11 +83,38 @@ export default function ProductManager({ products, categories, modifierGroups, o
     }
   };
 
+  // --- Functions to manage the ordered list ---
+  const handleAddModifier = (modifierGroupId) => {
+    if (!modifierGroupId || orderedModifiers.some(om => om.modifierGroupId === parseInt(modifierGroupId))) return;
+    
+    const groupToAdd = modifierGroups.find(mg => mg.value === modifierGroupId);
+    if (groupToAdd) {
+      setOrderedModifiers(current => [...current, { modifierGroupId: parseInt(modifierGroupId), modifierGroup: { name: groupToAdd.label } }]);
+    }
+  };
+
+  const handleRemoveModifier = (index) => {
+    setOrderedModifiers(current => current.filter((_, i) => i !== index));
+  };
+
+  const handleMoveModifier = (index, direction) => {
+    const newOrderedModifiers = [...orderedModifiers];
+    const item = newOrderedModifiers[index];
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    newOrderedModifiers[index] = newOrderedModifiers[swapIndex];
+    newOrderedModifiers[swapIndex] = item;
+    
+    setOrderedModifiers(newOrderedModifiers);
+  };
+
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase()));
   
   return (
     <>
+      {/* We will update this form in the next step to support ordering */}
       <AddProductForm onProductAdded={onDataChanged} categories={categories} modifierGroups={modifierGroups} />
+      
       <Paper shadow="xs" p="md" withBorder mt="xl">
         <Title order={2} mb="md">Product List</Title>
         <Box mb="md"><TextInput placeholder="Search by name or SKU..." leftSection={<IconSearch size={14} />} value={searchQuery} onChange={(e) => setSearchQuery(e.currentTarget.value)}/></Box>
@@ -54,6 +123,7 @@ export default function ProductManager({ products, categories, modifierGroups, o
           <Table.Tbody>{products.length === 0 ? <Table.Tr><Table.Td colSpan={6}><Text align="center">No products found.</Text></Table.Td></Table.Tr> : filteredProducts.map((p) => (<Table.Tr key={p.id}><Table.Td>{p.id}</Table.Td><Table.Td>{p.name}</Table.Td><Table.Td>{p.sku}</Table.Td><Table.Td>{p.category?.name || 'N/A'}</Table.Td><Table.Td>${Number(p.price).toFixed(2)}</Table.Td><Table.Td><Group gap="xs"><ActionIcon variant="outline" onClick={() => handleEditClick(p)}><IconEdit size={16} /></ActionIcon><ActionIcon title="Archive Product" color="red" variant="outline" onClick={() => handleArchive(p.id)}><IconArchive size={16} /></ActionIcon></Group></Table.Td></Table.Tr>))}</Table.Tbody>
         </Table>
       </Paper>
+
       <Modal opened={opened} onClose={close} title="Edit Product" size="lg">
         {selectedProduct && (
           <form onSubmit={handleUpdateProduct}>
@@ -61,16 +131,26 @@ export default function ProductManager({ products, categories, modifierGroups, o
             <TextInput mt="md" label="SKU" required value={selectedProduct.sku} onChange={(e) => setSelectedProduct({ ...selectedProduct, sku: e.currentTarget.value })}/>
             <NumberInput mt="md" label="Price" required precision={2} min={0} value={Number(selectedProduct.price)} onChange={(v) => setSelectedProduct({ ...selectedProduct, price: v || 0 })}/>
             <Select mt="md" label="Category" required data={categories} value={selectedProduct.categoryId} onChange={(v) => setSelectedProduct({ ...selectedProduct, categoryId: v })} />
-            <MultiSelect
-              mt="md"
-              label="Apply Modifier Groups"
-              placeholder="Select customizations for this product"
-              data={modifierGroups}
-              value={selectedProduct.modifierGroupIds}
-              onChange={(v) => setSelectedProduct({ ...selectedProduct, modifierGroupIds: v })}
-              clearable
-              searchable
-            />
+            
+            {/* --- UPDATED MODIFIER SECTION --- */}
+            <Box mt="md">
+              <Text fw={500}>Modifier Groups</Text>
+              <Select
+                label="Add a modifier group"
+                placeholder="Search and select a group to add..."
+                data={modifierGroups}
+                onChange={handleAddModifier}
+                searchable // This makes the dropdown searchable!
+                clearable
+              />
+              <OrderedModifierList 
+                items={orderedModifiers}
+                onMove={handleMoveModifier}
+                onRemove={handleRemoveModifier}
+              />
+            </Box>
+            {/* --- END UPDATED SECTION --- */}
+
             <Group justify="flex-end" mt="xl"><Button variant="default" onClick={close}>Cancel</Button><Button type="submit">Save Changes</Button></Group>
           </form>
         )}
