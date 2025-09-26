@@ -1,11 +1,25 @@
 // src/lib/db.js
-const { PrismaClient, Prisma } = require('../../prisma/bundled');
+const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { app } = require('electron');
 
+// This check is crucial for determining which Prisma Client to use.
 const isDev = !app.isPackaged;
+
+// --- THIS IS THE FIX ---
+// We now conditionally require the PrismaClient.
+let PrismaClient, Prisma;
+if (isDev) {
+  // In development, we use the client directly from node_modules, which is always up-to-date.
+  ({ PrismaClient, Prisma } = require('@prisma/client'));
+} else {
+  // In production, we use the client that was bundled during the build process.
+  ({ PrismaClient, Prisma } = require('../../prisma/bundled'));
+}
+// --- END OF FIX ---
+
+
 let dbPath;
 let enginePath;
 
@@ -58,7 +72,6 @@ const prismaInstance = new PrismaClient({
     },
 });
 
-// THIS IS THE IMPORTANT PART: We export an object
 module.exports = {
     prisma: prismaInstance,
     Prisma,

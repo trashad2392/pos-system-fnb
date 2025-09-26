@@ -2,6 +2,8 @@
 const { ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const { prisma } = require('../../lib/db');
+// NEW: We now import our shared template definitions
+const { modifierTemplates } = require('../../lib/modifierTemplates');
 
 function setupImportHandlers() {
   ipcMain.handle('open-file-dialog', async () => {
@@ -34,11 +36,37 @@ function setupImportHandlers() {
 
       if (data.modifierGroups) {
         for (const group of data.modifierGroups) {
+          
+          // --- NEW: Smart Template Logic ---
+          let groupConfig = {};
+
+          // If a "type" is specified in the JSON, find its template configuration
+          if (group.type) {
+            const template = modifierTemplates.find(t => t.name === group.type);
+            if (template) {
+              groupConfig = template.config;
+            } else {
+              console.warn(`Warning: Modifier group type "${group.type}" not found in templates. Manual values will be used.`);
+            }
+          }
+          
+          // Combine template config with any direct values from the JSON.
+          // This allows a user to use a template but override one specific rule if needed.
+          const finalGroupData = {
+            ...groupConfig,
+            name: group.name, // The name always comes from the JSON
+            minSelection: group.minSelection ?? groupConfig.minSelection,
+            selectionBudget: group.selectionBudget ?? groupConfig.selectionBudget,
+            maxSelections: group.maxSelections ?? groupConfig.maxSelections,
+            maxSelectionsSyncedToOptionCount: group.maxSelectionsSyncedToOptionCount ?? groupConfig.maxSelectionsSyncedToOptionCount,
+            allowRepeatedSelections: group.allowRepeatedSelections ?? groupConfig.allowRepeatedSelections,
+            exactBudgetRequired: group.exactBudgetRequired ?? groupConfig.exactBudgetRequired
+          };
+          // --- END NEW LOGIC ---
+
           const newGroup = await tx.modifierGroup.create({
             data: {
-              name: group.name,
-              minSelection: group.minSelection,
-              selectionBudget: group.selectionBudget,
+              ...finalGroupData,
               options: {
                 create: group.options.map(opt => ({
                   name: opt.name,

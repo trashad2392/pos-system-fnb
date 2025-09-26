@@ -2,8 +2,7 @@
   "modifierGroups": [
     {
       "name": "Coffee Milk Options",
-      "minSelection": 1,
-      "selectionBudget": 1,
+      "type": "Single Choice (Required)",
       "options": [
         { "name": "Whole Milk", "priceAdjustment": 0.00, "selectionCost": 1 },
         { "name": "Skim Milk", "priceAdjustment": 0.00, "selectionCost": 1 },
@@ -13,8 +12,7 @@
     },
     {
       "name": "Syrup Flavors (Optional)",
-      "minSelection": 0,
-      "selectionBudget": 1,
+      "type": "Optional Add-ons",
       "options": [
         { "name": "Vanilla Syrup", "priceAdjustment": 0.50, "selectionCost": 1 },
         { "name": "Caramel Syrup", "priceAdjustment": 0.50, "selectionCost": 1 },
@@ -23,8 +21,7 @@
     },
     {
       "name": "Steak Cooking Level",
-      "minSelection": 1,
-      "selectionBudget": 1,
+      "type": "Single Choice (Required)",
       "options": [
         { "name": "Rare", "priceAdjustment": 0.00, "selectionCost": 1 },
         { "name": "Medium-Rare", "priceAdjustment": 0.00, "selectionCost": 1 },
@@ -33,9 +30,11 @@
       ]
     },
     {
-      "name": "Fillet Sides (Budget of 2)",
+      "name": "Fillet Sides (Custom Rule)",
+      "description": "This is an example of a manual override, without using a 'type'.",
       "minSelection": 1,
       "selectionBudget": 2,
+      "maxSelections": 2,
       "options": [
         { "name": "French Fries", "priceAdjustment": 0.00, "selectionCost": 1 },
         { "name": "Mashed Potatoes", "priceAdjustment": 0.00, "selectionCost": 1 },
@@ -45,9 +44,8 @@
       ]
     },
     {
-      "name": "Pizza Toppings (Budget of 4)",
-      "minSelection": 0,
-      "selectionBudget": 4,
+      "name": "Pizza Toppings",
+      "type": "Toppings with Repeats",
       "options": [
         { "name": "Mushrooms", "priceAdjustment": 1.00, "selectionCost": 1 },
         { "name": "Onions", "priceAdjustment": 1.00, "selectionCost": 1 },
@@ -67,13 +65,13 @@
           "name": "Beef Fillet",
           "sku": "MAIN-FILLET",
           "price": 28.00,
-          "modifierGroups": ["Steak Cooking Level", "Fillet Sides (Budget of 2)"]
+          "modifierGroups": ["Steak Cooking Level", "Fillet Sides (Custom Rule)"]
         },
         {
           "name": "Margherita Pizza",
           "sku": "MAIN-PIZZA",
           "price": 14.00,
-          "modifierGroups": ["Pizza Toppings (Budget of 4)"]
+          "modifierGroups": ["Pizza Toppings"]
         }
       ]
     },

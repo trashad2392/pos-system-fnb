@@ -41,6 +41,10 @@ model ModifierGroup {
   name            String
   minSelection    Int      @default(0)
   selectionBudget Int      @default(1)
+  maxSelections                     Int? 
+  maxSelectionsSyncedToOptionCount  Boolean   @default(false) 
+  allowRepeatedSelections           Boolean   @default(false) 
+  exactBudgetRequired               Boolean   @default(false)
   options         ModifierOption[]
 
   products        ProductModifierGroup[]

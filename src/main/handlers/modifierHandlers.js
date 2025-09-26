@@ -8,9 +8,56 @@ function setupModifierHandlers() {
     include: { options: { orderBy: { name: 'asc' } } } 
   }));
   
-  ipcMain.handle('add-modifier-group', (e, data) => prisma.modifierGroup.create({ data }));
+  // UPDATED: This handler now accepts and saves all our new fields.
+  ipcMain.handle('add-modifier-group', (e, data) => {
+    const {
+      name,
+      minSelection,
+      selectionBudget,
+      maxSelections,
+      maxSelectionsSyncedToOptionCount,
+      allowRepeatedSelections,
+      exactBudgetRequired,
+    } = data;
+
+    return prisma.modifierGroup.create({
+      data: {
+        name,
+        minSelection,
+        selectionBudget,
+        maxSelections,
+        maxSelectionsSyncedToOptionCount,
+        allowRepeatedSelections,
+        exactBudgetRequired,
+      },
+    });
+  });
   
-  ipcMain.handle('update-modifier-group', (e, { id, data }) => prisma.modifierGroup.update({ where: { id }, data }));
+  // UPDATED: This handler now accepts and saves all our new fields.
+  ipcMain.handle('update-modifier-group', (e, { id, data }) => {
+    const {
+      name,
+      minSelection,
+      selectionBudget,
+      maxSelections,
+      maxSelectionsSyncedToOptionCount,
+      allowRepeatedSelections,
+      exactBudgetRequired,
+    } = data;
+    
+    return prisma.modifierGroup.update({ 
+      where: { id }, 
+      data: {
+        name,
+        minSelection,
+        selectionBudget,
+        maxSelections,
+        maxSelectionsSyncedToOptionCount,
+        allowRepeatedSelections,
+        exactBudgetRequired,
+      } 
+    });
+  });
   
   ipcMain.handle('delete-modifier-group', async (e, id) => {
     const optionCount = await prisma.modifierOption.count({ where: { modifierGroupId: id } });
