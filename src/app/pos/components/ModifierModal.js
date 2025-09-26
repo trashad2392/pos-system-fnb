@@ -1,69 +1,120 @@
 // src/app/pos/components/ModifierModal.js
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import { Modal, Title, Text, Button, Group, Divider, Box, Chip, Progress, Badge } from '@mantine/core';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Modal, Title, Text, Button, Group, Divider, Box, Chip, Progress, Badge, Grid, Paper, ScrollArea } from '@mantine/core';
 
+// --- Helper Hook to get previous value ---
+function usePrevious(value) {
+  const ref = useRef();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
+
+// --- Summary Panel Component ---
+function SummaryPanel({ product, sortedModifierGroups, selections, totalPrice }) {
+  return (
+    <Paper withBorder p="md" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Title order={4}>Order Summary</Title>
+      <Divider my="sm" />
+      <ScrollArea style={{ flex: 1 }}>
+        <Group justify="space-between">
+          <Text fw={500}>{product.name}</Text>
+          <Text fw={500}>${product.price.toFixed(2)}</Text>
+        </Group>
+        <Box mt="sm" pl="sm">
+          {sortedModifierGroups.map(group => {
+            const groupSelections = selections[group.id];
+            if (!groupSelections || Object.keys(groupSelections).length === 0) return null;
+
+            return (
+              <Box key={group.id} mb="xs">
+                <Text size="sm" fw={500} c="dimmed">{group.name}:</Text>
+                {Object.entries(groupSelections).map(([optionId, quantity]) => {
+                  const option = group.options.find(opt => opt.id === Number(optionId));
+                  if (!option) return null;
+                  return (
+                    <Text key={optionId} size="sm" pl="sm">
+                      &bull; {option.name} {quantity > 1 ? `(x${quantity})` : ''}
+                      {option.priceAdjustment > 0 ? <Text span c="green"> +${(option.priceAdjustment * quantity).toFixed(2)}</Text> : ''}
+                    </Text>
+                  );
+                })}
+              </Box>
+            );
+          })}
+        </Box>
+      </ScrollArea>
+      <Divider my="sm" mt="auto" />
+      <Group justify="space-between">
+        <Title order={3}>Total:</Title>
+        <Title order={3}>${totalPrice.toFixed(2)}</Title>
+      </Group>
+    </Paper>
+  );
+}
+
+// --- Main Modal Component ---
 export default function ModifierModal({ product, opened, onClose, onConfirm }) {
-  // --- STATE MANAGEMENT ---
   const [currentStep, setCurrentStep] = useState(0);
-  // NEW: Selections now store quantities for each option, e.g., { groupId: { optionId: quantity } }
   const [selections, setSelections] = useState({});
   const [totalPrice, setTotalPrice] = useState(0);
-  // NEW: Tracks the required selection cost for groups with 'exactBudgetRequired'
-  const [lockedCosts, setLockedCosts] = useState({});
+  const [lockedCost, setLockedCost] = useState(null);
+  
+  const prevStep = usePrevious(currentStep);
 
-  // --- DATA & CALCULATIONS ---
-
-  // Memoize sorted modifier groups to prevent re-sorting on every render
   const sortedModifierGroups = useMemo(() => {
-    if (!product || !product.modifierGroups) return [];
+    if (!product?.modifierGroups) return [];
     return [...product.modifierGroups].sort((a, b) => a.displayOrder - b.displayOrder).map(pmg => pmg.modifierGroup);
   }, [product]);
 
-  // Get the current group based on the step
-  const currentGroup = sortedModifierGroups[currentStep];
-  const currentGroupSelections = selections[currentGroup?.id] || {};
-  
-  // Calculate the total points and items used for the current group
-  const { pointsUsed, itemsUsed } = useMemo(() => {
-    if (!currentGroup) return { pointsUsed: 0, itemsUsed: 0 };
-    let points = 0;
-    let items = 0;
+  const currentGroup = useMemo(() => sortedModifierGroups[currentStep], [sortedModifierGroups, currentStep]);
+
+  const derivedState = useMemo(() => {
+    if (!currentGroup) {
+      return { pointsUsed: 0, itemsUsed: 0, effectiveMaxSelections: null, isMinMet: false };
+    }
+    const currentGroupSelections = selections[currentGroup.id] || {};
+    let pointsUsed = 0;
+    let itemsUsed = 0;
     for (const optionId in currentGroupSelections) {
       const quantity = currentGroupSelections[optionId];
       const option = currentGroup.options.find(opt => opt.id === Number(optionId));
       if (option) {
-        points += option.selectionCost * quantity;
-        items += quantity;
+        pointsUsed += option.selectionCost * quantity;
+        itemsUsed += quantity;
       }
     }
-    return { pointsUsed: points, itemsUsed: items };
-  }, [currentGroup, currentGroupSelections]);
+    
+    let effectiveMaxSelections = currentGroup.maxSelectionsSyncedToOptionCount ? currentGroup.options.length : currentGroup.maxSelections;
 
-  // Determine the effective maximum number of selections
-  const effectiveMaxSelections = useMemo(() => {
-    if (!currentGroup) return null;
-    if (currentGroup.maxSelectionsSyncedToOptionCount) {
-      return currentGroup.options.length;
+    if (effectiveMaxSelections === null && currentGroup.minSelection === 1 && currentGroup.selectionBudget === 1) {
+      effectiveMaxSelections = 1;
     }
-    return currentGroup.maxSelections;
-  }, [currentGroup]);
 
+    const isMinMet = itemsUsed >= currentGroup.minSelection;
 
-  // --- SIDE EFFECTS (useEffect) ---
+    return { pointsUsed, itemsUsed, effectiveMaxSelections, isMinMet };
+  }, [currentGroup, selections]);
 
-  // Reset state when a new product is passed in or the modal is opened
+  const { pointsUsed, itemsUsed, effectiveMaxSelections, isMinMet } = derivedState;
+
   useEffect(() => {
     if (opened && product) {
       setCurrentStep(0);
       setSelections({});
-      setLockedCosts({});
       setTotalPrice(product.price);
+      setLockedCost(null);
     }
   }, [opened, product]);
 
-  // Recalculate total price whenever selections change
+  useEffect(() => {
+    // Reset locked cost when the step (currentGroup) changes
+    setLockedCost(null);
+  }, [currentStep]);
+
   useEffect(() => {
     if (!product) return;
     let newTotal = product.price;
@@ -73,84 +124,16 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
         Object.keys(selections[groupId]).forEach(optionId => {
           const quantity = selections[groupId][optionId];
           const option = group.options.find(opt => opt.id === Number(optionId));
-          if (option) {
-            newTotal += option.priceAdjustment * quantity;
-          }
+          if (option) newTotal += option.priceAdjustment * quantity;
         });
       }
     });
     setTotalPrice(newTotal);
   }, [selections, product, sortedModifierGroups]);
 
-  // --- HANDLER FUNCTIONS ---
-
-  const handleSelectionChange = (groupId, option) => {
-    const currentSelectionsForGroup = selections[groupId] || {};
-    const existingQty = currentSelectionsForGroup[option.id] || 0;
-    const newSelections = { ...selections };
-
-    // Determine the new quantity for the selected option
-    let newQty;
-    if (currentGroup.allowRepeatedSelections) {
-      newQty = existingQty + 1;
-    } else {
-      newQty = existingQty > 0 ? 0 : 1; // Toggle if repeats are not allowed
-    }
-
-    // --- RULE VALIDATION ---
-    const tempSelections = { ...currentSelectionsForGroup, [option.id]: newQty };
-    let tempItemsUsed = 0;
-    let tempPointsUsed = 0;
-    for (const optId in tempSelections) {
-      const qty = tempSelections[optId];
-      const opt = currentGroup.options.find(o => o.id === Number(optId));
-      if (opt && qty > 0) {
-        tempItemsUsed += qty;
-        tempPointsUsed += opt.selectionCost * qty;
-      }
-    }
-
-    // 1. Check max selections limit
-    if (effectiveMaxSelections !== null && tempItemsUsed > effectiveMaxSelections) {
-      // If we are just adding one and it would exceed, don't do it
-      if (newQty === existingQty + 1) return; 
-    }
-
-    // 2. Check selection budget limit
-    if (tempPointsUsed > currentGroup.selectionBudget) {
-      // Prevent adding if it exceeds the budget
-      if (newQty > existingQty) return;
-    }
-    
-    // --- UPDATE STATE ---
-    if (newQty > 0) {
-      newSelections[groupId] = { ...currentSelectionsForGroup, [option.id]: newQty };
-    } else {
-      delete currentSelectionsForGroup[option.id];
-      newSelections[groupId] = { ...currentSelectionsForGroup };
-    }
-    
-    setSelections(newSelections);
-
-    // --- COMPLEX RULE: Lock selection cost for "exact budget" groups ---
-    if (currentGroup.exactBudgetRequired) {
-      const isFirstSelection = Object.keys(currentSelectionsForGroup).length === 0 && newQty > 0;
-      const isLastSelectionCleared = Object.keys(newSelections[groupId]).length === 0;
-
-      if (isFirstSelection) {
-        setLockedCosts({ ...lockedCosts, [groupId]: option.selectionCost });
-      } else if (isLastSelectionCleared) {
-        const newLockedCosts = { ...lockedCosts };
-        delete newLockedCosts[groupId];
-        setLockedCosts(newLockedCosts);
-      }
-    }
-  };
-
-  const handleNextOrFinish = () => {
+  const handleNextOrFinish = useCallback(() => {
     const isFinalStep = currentStep === sortedModifierGroups.length - 1;
     if (isFinalStep) {
-      // Flatten all selections into a single array of option IDs
       const allSelectedOptionIds = [];
       Object.keys(selections).forEach(groupId => {
         Object.keys(selections[groupId]).forEach(optionId => {
@@ -164,84 +147,183 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
     } else {
       setCurrentStep(s => s + 1);
     }
+  }, [currentStep, sortedModifierGroups.length, selections, onConfirm, product]);
+
+  const handleBack = () => {
+    if (currentStep > 0) {
+      const prevStepIndex = currentStep - 1;
+      const prevGroup = sortedModifierGroups[prevStepIndex];
+
+      if (prevGroup) {
+        const newSelections = { ...selections };
+        delete newSelections[prevGroup.id];
+        setSelections(newSelections);
+      }
+      
+      setCurrentStep(prevStepIndex);
+    }
   };
   
-  // --- RENDER LOGIC ---
+  useEffect(() => {
+    const navigatedBackwards = typeof prevStep !== 'undefined' && prevStep > currentStep;
+    if (navigatedBackwards || !currentGroup || !opened) {
+      return; 
+    }
+    
+    const maxItemsMet = effectiveMaxSelections !== null && itemsUsed >= effectiveMaxSelections;
+    const budgetMet = pointsUsed >= currentGroup.selectionBudget;
+
+    if ((maxItemsMet || budgetMet) && itemsUsed > 0) {
+      const timer = setTimeout(() => handleNextOrFinish(), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep, prevStep, itemsUsed, pointsUsed, currentGroup, opened, effectiveMaxSelections, handleNextOrFinish]);
+
+  const handleSelectionChange = (groupId, option) => {
+    const groupSelections = selections[groupId] || {};
+    const newGroupSelections = { ...groupSelections };
+    const isCurrentlySelected = !!newGroupSelections[option.id];
+
+    if (currentGroup.allowRepeatedSelections) {
+      newGroupSelections[option.id] = (newGroupSelections[option.id] || 0) + 1;
+    } else {
+      if (effectiveMaxSelections === 1) {
+        setSelections({ ...selections, [groupId]: { [option.id]: 1 } });
+        return; 
+      } else {
+        if (isCurrentlySelected) {
+          delete newGroupSelections[option.id];
+        } else {
+          newGroupSelections[option.id] = 1;
+        }
+      }
+    }
+
+    // --- THIS IS THE FIX ---
+    // Only apply cost locking for exact budget groups
+    if (currentGroup.exactBudgetRequired) {
+      const isFirstSelection = Object.keys(groupSelections).length === 0 && !isCurrentlySelected;
+      const isLastSelection = Object.keys(newGroupSelections).length === 0;
+
+      if (isFirstSelection) {
+        setLockedCost(option.selectionCost);
+      } else if (isLastSelection) {
+        setLockedCost(null);
+      }
+    }
+    
+    let tempItemsUsed = 0;
+    let tempPointsUsed = 0;
+    for (const optId in newGroupSelections) {
+      const qty = newGroupSelections[optId];
+      const opt = currentGroup.options.find(o => o.id === Number(optId));
+      if (opt) {
+        tempItemsUsed += qty;
+        tempPointsUsed += opt.selectionCost * qty;
+      }
+    }
+
+    if (effectiveMaxSelections !== null && tempItemsUsed > effectiveMaxSelections) return;
+    if (tempPointsUsed > currentGroup.selectionBudget) return;
+
+    setSelections({ ...selections, [groupId]: newGroupSelections });
+  };
+
+  const buttonState = useMemo(() => {
+    if (!currentGroup) return { show: false };
+    
+    const isFixedQuantity = effectiveMaxSelections !== null && currentGroup.minSelection === effectiveMaxSelections;
+    
+    if (isFixedQuantity || currentGroup.exactBudgetRequired) {
+      return { show: false };
+    }
+    
+    if (!isMinMet) {
+      return { show: false };
+    }
+
+    const isFinalStep = currentStep === sortedModifierGroups.length - 1;
+    let text = isFinalStep ? 'Confirm' : 'Next';
+    if (currentGroup.minSelection === 0 && itemsUsed === 0) {
+      text = 'Skip';
+    }
+    
+    return { show: true, text, enabled: isMinMet };
+  }, [currentGroup, itemsUsed, currentStep, sortedModifierGroups.length, effectiveMaxSelections, isMinMet]);
+
 
   if (!product || !opened || !currentGroup) return null;
-  
-  const isMinMet = itemsUsed >= currentGroup.minSelection;
-  const isBudgetOk = currentGroup.exactBudgetRequired ? (pointsUsed === currentGroup.selectionBudget) : (pointsUsed <= currentGroup.selectionBudget);
-  const isGroupComplete = isMinMet && isBudgetOk;
-  
+
   return (
-    <Modal opened={opened} onClose={onClose} title={`Customize ${product.name}`} size="lg" withCloseButton={false} closeOnClickOutside={false} closeOnEscape={false}>
-      <Progress value={((currentStep + 1) / sortedModifierGroups.length) * 100} mb="md" />
-      
-      <Box style={{ minHeight: '40vh', position: 'relative' }}>
-        <Box key={currentGroup.id}>
-          <Group justify="space-between">
-            <Title order={4}>{currentGroup.name}</Title>
-            <Text size="sm" c="dimmed">Points used: {pointsUsed} / {currentGroup.selectionBudget}</Text>
-          </Group>
-          <Text size="sm" c="dimmed">
-            Choose at least {currentGroup.minSelection}.
-            {effectiveMaxSelections !== null && ` Choose up to ${effectiveMaxSelections}.`}
-          </Text>
-          <Divider my="md" />
-          
-          <Group mt="xs" gap="md">
-            {currentGroup.options.map(option => {
-              const quantity = currentGroupSelections[option.id] || 0;
-              const isSelected = quantity > 0;
+    <Modal opened={opened} onClose={onClose} title={`Customize ${product.name}`} size="xl" withCloseButton={false} closeOnClickOutside={false} closeOnEscape={false}>
+      <Grid>
+        <Grid.Col span={4}>
+          <SummaryPanel product={product} sortedModifierGroups={sortedModifierGroups} selections={selections} totalPrice={totalPrice} />
+        </Grid.Col>
+
+        <Grid.Col span={8}>
+          <Progress value={((currentStep + 1) / sortedModifierGroups.length) * 100} mb="md" />
+          <Box style={{ minHeight: '50vh', position: 'relative' }}>
+              <Group justify="space-between">
+                <Title order={4}>{currentGroup.name}</Title>
+                <Text size="sm" c="dimmed">Points used: {pointsUsed} / {currentGroup.selectionBudget}</Text>
+              </Group>
+              <Text size="sm" c="dimmed">
+                {currentGroup.minSelection > 0 ? `Choose at least ${currentGroup.minSelection}.` : 'Optional.'}
+                {effectiveMaxSelections !== null && ` Choose up to ${effectiveMaxSelections}.`}
+              </Text>
+              <Divider my="md" />
               
-              // --- Disabling Logic ---
-              let isDisabled = false;
-              // 1. Locked cost for exact budget groups (like the grill)
-              const lockedCost = lockedCosts[currentGroup.id];
-              if (lockedCost !== undefined && option.selectionCost !== 0 && option.selectionCost !== lockedCost) {
-                isDisabled = true;
-              }
-              // 2. Budget exceeded
-              if (!isSelected && pointsUsed + option.selectionCost > currentGroup.selectionBudget) {
-                isDisabled = true;
-              }
-              // 3. Max items reached
-              if (!isSelected && effectiveMaxSelections !== null && itemsUsed >= effectiveMaxSelections) {
-                isDisabled = true;
-              }
+              <ScrollArea style={{ height: 'calc(50vh - 80px)' }}>
+                <Group mt="xs" gap="md">
+                  {currentGroup.options
+                    .filter(option => {
+                      const isSelected = !!(selections[currentGroup.id] && selections[currentGroup.id][option.id]);
+                      // --- THIS IS THE FIX ---
+                      // Only apply lockedCost filter if it's set (for exact budget groups)
+                      if (lockedCost !== null && option.selectionCost !== lockedCost) {
+                        return false;
+                      }
+                      if (!isSelected && (pointsUsed + option.selectionCost > currentGroup.selectionBudget)) {
+                        return false;
+                      }
+                      return true;
+                    })
+                    .map(option => {
+                      const quantity = (selections[currentGroup.id] && selections[currentGroup.id][option.id]) || 0;
+                      return (
+                        <Chip
+                          key={option.id}
+                          value={option.id.toString()}
+                          checked={quantity > 0}
+                          onChange={() => handleSelectionChange(currentGroup.id, option)}
+                          variant="outline"
+                          size="lg"
+                          radius="md"
+                        >
+                          <Group gap="xs">
+                            <Text>{option.name}</Text>
+                            {currentGroup.allowRepeatedSelections && quantity > 0 && (<Badge variant="light" size="lg">{quantity}</Badge>)}
+                            <Text size="sm" c="dimmed">
+                              ({option.selectionCost}pt) {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
+                            </Text>
+                          </Group>
+                        </Chip>
+                      );
+                  })}
+                </Group>
+              </ScrollArea>
+          </Box>
+        </Grid.Col>
+      </Grid>
 
-              return (
-                <Chip
-                  key={option.id}
-                  value={option.id.toString()}
-                  checked={isSelected}
-                  onChange={() => handleSelectionChange(currentGroup.id, option)}
-                  variant="outline"
-                  size="lg"
-                  radius="md"
-                  disabled={isDisabled}
-                >
-                  <Group gap="xs">
-                    <Text>{option.name}</Text>
-                    {currentGroup.allowRepeatedSelections && isSelected && (<Badge variant="light" size="lg">{quantity}</Badge>)}
-                    <Text size="sm" c="dimmed">
-                      ({option.selectionCost}pt) {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
-                    </Text>
-                  </Group>
-                </Chip>
-              );
-            })}
-          </Group>
-        </Box>
-      </Box>
-
-      <Divider my="sm" />
-      <Group justify="space-between" align="center" mt="md">
-        <Title order={3}>Total: ${totalPrice.toFixed(2)}</Title>
-        <Button onClick={handleNextOrFinish} disabled={!isGroupComplete}>
-          {currentStep === sortedModifierGroups.length - 1 ? 'Confirm' : 'Next'}
-        </Button>
+      <Group justify="space-between" align="center" mt="md" pt="sm" style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+        <Button variant="default" onClick={handleBack} disabled={currentStep === 0}>Back</Button>
+        {buttonState.show && (
+          <Button onClick={handleNextOrFinish} disabled={!buttonState.enabled}>
+            {buttonState.text}
+          </Button>
+        )}
       </Group>
     </Modal>
   );
