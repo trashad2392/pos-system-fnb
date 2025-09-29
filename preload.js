@@ -9,8 +9,11 @@ contextBridge.exposeInMainWorld('api', {
   deleteProduct: (id) => ipcRenderer.invoke('delete-product', id),
   
   // Sale/Order Functions
-  createSale: (items) => ipcRenderer.invoke('create-sale', items),
   getSales: () => ipcRenderer.invoke('get-sales'),
+  getSalesByDateRange: (range) => ipcRenderer.invoke('get-sales-by-date-range', range),
+  getSalesStats: (range) => ipcRenderer.invoke('get-sales-stats', range),
+  getSalesComparison: (range) => ipcRenderer.invoke('get-sales-comparison', range), // NEW
+  getDailySalesForRange: (range) => ipcRenderer.invoke('get-daily-sales-for-range', range), // NEW
   createOrder: (data) => ipcRenderer.invoke('create-order', data),
   getOpenOrderForTable: (tableId) => ipcRenderer.invoke('get-open-order-for-table', tableId),
   addItemToOrder: (data) => ipcRenderer.invoke('add-item-to-order', data),
@@ -22,8 +25,8 @@ contextBridge.exposeInMainWorld('api', {
   resumeHeldOrder: (data) => ipcRenderer.invoke('resume-held-order', data),
   deleteHeldOrder: (data) => ipcRenderer.invoke('delete-held-order', data),
   clearOrder: (data) => ipcRenderer.invoke('clear-order', data),
-  updateItemComment: (data) => ipcRenderer.invoke('update-item-comment', data), // NEW
-  updateOrderComment: (data) => ipcRenderer.invoke('update-order-comment', data), // NEW
+  updateItemComment: (data) => ipcRenderer.invoke('update-item-comment', data),
+  updateOrderComment: (data) => ipcRenderer.invoke('update-order-comment', data),
 
   // Category Functions
   getCategories: () => ipcRenderer.invoke('get-categories'),

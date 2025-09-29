@@ -1,6 +1,7 @@
 // src/main/handlers/orderHandlers.js
 const { ipcMain } = require('electron');
 const { prisma } = require('../../lib/db');
+const { differenceInMilliseconds, subMilliseconds, formatISO } = require('date-fns');
 
 async function getUpdatedOrder(tx, orderId) {
   const order = await tx.order.findUnique({
@@ -10,7 +11,7 @@ async function getUpdatedOrder(tx, orderId) {
         include: {
           product: true,
           selectedModifiers: {
-            orderBy: { displayOrder: 'asc' }, // Order by our new field
+            orderBy: { displayOrder: 'asc' },
             include: { modifierOption: true },
           },
         },
@@ -18,7 +19,6 @@ async function getUpdatedOrder(tx, orderId) {
     },
   });
 
-  // Recalculate total amount based on items and their modifiers
   const totalAmount = order.items.reduce((sum, item) => {
     const itemBasePrice = item.priceAtTimeOfOrder;
     const modifiersTotal = item.selectedModifiers.reduce((modSum, mod) => {
@@ -27,10 +27,8 @@ async function getUpdatedOrder(tx, orderId) {
     return sum + (item.quantity * (itemBasePrice + modifiersTotal));
   }, 0);
 
-
   await tx.order.update({ where: { id: orderId }, data: { totalAmount: totalAmount } });
 
-  // Re-fetch the full order with the final total
   return tx.order.findUnique({
     where: { id: orderId },
     include: {
@@ -49,6 +47,43 @@ async function getUpdatedOrder(tx, orderId) {
   });
 }
 
+async function getStatsForPeriod(startDate, endDate) {
+  const paidOrders = await prisma.order.findMany({
+    where: {
+      status: 'PAID',
+      createdAt: { gte: startDate, lte: endDate },
+    },
+    include: {
+      items: {
+        include: { product: true }
+      }
+    }
+  });
+
+  const totalRevenue = paidOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const totalSales = paidOrders.length;
+  const averageSaleValue = totalSales > 0 ? totalRevenue / totalSales : 0;
+
+  const productCounts = paidOrders
+    .flatMap(order => order.items)
+    .reduce((acc, item) => {
+      acc[item.product.name] = (acc[item.product.name] || 0) + item.quantity;
+      return acc;
+    }, {});
+
+  const bestSellingItem = Object.entries(productCounts).sort(([, a], [, b]) => b - a)[0] || ['N/A', 0];
+
+  return {
+    totalRevenue,
+    totalSales,
+    averageSaleValue,
+    bestSellingItem: {
+      name: bestSellingItem[0],
+      quantity: bestSellingItem[1],
+    },
+  };
+}
+
 function setupOrderHandlers() {
   ipcMain.handle('get-sales', async () => prisma.order.findMany({
     where: { status: { in: ['PAID', 'CLEARED'] } },
@@ -57,7 +92,7 @@ function setupOrderHandlers() {
       items: {
         include: {
           product: true,
-          selectedModifiers: { // This now correctly includes the nested modifier option data
+          selectedModifiers: {
             orderBy: { displayOrder: 'asc' },
             include: { modifierOption: true }
           }
@@ -65,6 +100,69 @@ function setupOrderHandlers() {
       }
     }
   }));
+
+  ipcMain.handle('get-sales-by-date-range', async (e, { startDate, endDate }) => {
+    return prisma.order.findMany({
+      where: {
+        status: 'PAID',
+        createdAt: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          include: {
+            product: true,
+            selectedModifiers: {
+              orderBy: { displayOrder: 'asc' },
+              include: { modifierOption: true }
+            }
+          }
+        }
+      }
+    });
+  });
+
+  ipcMain.handle('get-sales-stats', async (e, { startDate, endDate }) => {
+    return getStatsForPeriod(new Date(startDate), new Date(endDate));
+  });
+
+  ipcMain.handle('get-sales-comparison', async (e, { startDate, endDate }) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    
+    const duration = differenceInMilliseconds(end, start);
+    
+    const prevStart = subMilliseconds(start, duration);
+    const prevEnd = subMilliseconds(end, duration);
+
+    return getStatsForPeriod(prevStart, prevEnd);
+  });
+
+  ipcMain.handle('get-daily-sales-for-range', async (e, { startDate, endDate }) => {
+    const paidOrders = await prisma.order.findMany({
+      where: {
+        status: 'PAID',
+        createdAt: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+    });
+
+    const salesByDay = paidOrders.reduce((acc, order) => {
+      const day = formatISO(order.createdAt, { representation: 'date' });
+      acc[day] = (acc[day] || 0) + order.totalAmount;
+      return acc;
+    }, {});
+
+    return Object.entries(salesByDay).map(([date, total]) => ({
+      date,
+      total: parseFloat(total.toFixed(2)),
+    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+  });
 
   ipcMain.handle('create-order', async (e, { tableId, orderType }) => {
     return prisma.$transaction(async (tx) => {
@@ -105,17 +203,11 @@ function setupOrderHandlers() {
     return prisma.$transaction(async (tx) => {
       const product = await tx.product.findUnique({ where: { id: productId } });
       if (!product) throw new Error('Product not found.');
-
-      // Price at time of order is now just the base product price.
-      // Modifier adjustments will be calculated from the related table.
       const priceAtTimeOfOrder = product.price;
-
-      // Check for an existing item with the exact same modifiers in the same order
       const existingItems = await tx.orderItem.findMany({
         where: { orderId, productId },
         include: { selectedModifiers: { orderBy: { displayOrder: 'asc' } } },
       });
-
       const matchingItem = existingItems.find(item => {
         if (item.selectedModifiers.length !== selectedModifiers.length) return false;
         return item.selectedModifiers.every((mod, index) =>
@@ -123,15 +215,12 @@ function setupOrderHandlers() {
           mod.quantity === selectedModifiers[index].quantity
         );
       });
-
       if (matchingItem) {
-        // If a matching item exists, just increment its quantity
         await tx.orderItem.update({
           where: { id: matchingItem.id },
           data: { quantity: { increment: 1 } },
         });
       } else {
-        // Otherwise, create a new order item and its modifier links
         const newOrderItem = await tx.orderItem.create({
           data: {
             orderId,
@@ -140,7 +229,6 @@ function setupOrderHandlers() {
             priceAtTimeOfOrder,
           },
         });
-
         if (selectedModifiers.length > 0) {
           await tx.orderItemModifier.createMany({
             data: selectedModifiers.map((mod, index) => ({
@@ -152,11 +240,9 @@ function setupOrderHandlers() {
           });
         }
       }
-
       return getUpdatedOrder(tx, orderId);
     });
   });
-
 
   ipcMain.handle('update-item-quantity', async (e, { orderId, orderItemId, quantity }) => {
     return prisma.$transaction(async (tx) => {
@@ -187,7 +273,7 @@ function setupOrderHandlers() {
       return tx.order.update({ where: { id: orderId }, data: { status: 'PAID', paymentMethod: paymentMethod } });
     });
   });
-
+  
   ipcMain.handle('hold-order', async (e, { orderId }) => {
     return prisma.$transaction(async (tx) => {
       const orderToHold = await tx.order.findUnique({ where: { id: orderId } });
@@ -204,14 +290,7 @@ function setupOrderHandlers() {
       where: { status: 'HOLD', orderType: orderType },
       orderBy: { createdAt: 'desc' },
       take: 10,
-      include: {
-        items: {
-          include: {
-            product: true,
-            selectedModifiers: { include: { modifierOption: true } }
-          }
-        }
-      }
+      include: { items: { include: { product: true, selectedModifiers: { include: { modifierOption: true } } } } }
     });
   });
 
@@ -219,7 +298,7 @@ function setupOrderHandlers() {
     await prisma.order.update({ where: { id: orderId }, data: { status: 'OPEN' } });
     return getUpdatedOrder(prisma, orderId);
   });
-
+  
   ipcMain.handle('delete-held-order', async (e, { orderId }) => {
     return prisma.$transaction(async (tx) => {
       const heldOrder = await tx.order.findUnique({ where: { id: orderId } });
@@ -231,7 +310,7 @@ function setupOrderHandlers() {
       return { success: true };
     });
   });
-
+  
   ipcMain.handle('clear-order', async (e, { orderId }) => {
     return prisma.$transaction(async (tx) => {
       const orderToClear = await tx.order.findUnique({ where: { id: orderId } });
@@ -264,4 +343,5 @@ function setupOrderHandlers() {
     });
   });
 }
+
 module.exports = { setupOrderHandlers };

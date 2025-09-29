@@ -9,19 +9,20 @@ import { notifications } from '@mantine/notifications';
 export function usePosLogic() {
   const { tables, menu, isLoading, refreshData } = usePosData();
 
-  // --- STATE MANAGEMENT ---
   const [activeOrder, setActiveOrder] = useState(null);
   const [posView, setPosView] = useState('home');
   const [heldOrders, setHeldOrders] = useState([]);
   const [customizingProduct, setCustomizingProduct] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [commentTarget, setCommentTarget] = useState(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [modifierModalOpened, { open: openModifierModal, close: closeModifierModal }] = useDisclosure(false);
   const [paymentModalOpened, { open: openPaymentModal, close: closePaymentModal }] = useDisclosure(false);
   const [heldOrdersModalOpened, { open: openHeldOrdersModal, close: closeHeldOrdersModal }] = useDisclosure(false);
   const [commentModalOpened, { open: openCommentModal, close: closeCommentModal }] = useDisclosure(false);
 
-  // --- NEW COMMENT HANDLERS ---
+  const toggleKeyboard = () => setKeyboardVisible((v) => !v);
+
   const handleOpenCommentModal = (target) => {
     setCommentTarget(target);
     openCommentModal();
@@ -31,13 +32,13 @@ export function usePosLogic() {
     if (!activeOrder) return;
     try {
       let updatedOrder;
-      if (target.product) { // It's an order item
+      if (target.product) {
         updatedOrder = await window.api.updateItemComment({
           orderId: activeOrder.id,
           orderItemId: target.id,
           comment,
         });
-      } else { // It's the whole order
+      } else {
         updatedOrder = await window.api.updateOrderComment({
           orderId: activeOrder.id,
           comment,
@@ -160,7 +161,7 @@ export function usePosLogic() {
     if (!activeOrder) return;
     try {
       await window.api.deleteHeldOrder({ orderId });
-      handleShowHeldOrders(); // Refresh the list
+      handleShowHeldOrders();
     } catch (error) {
       notifications.show({ title: 'Error', message: `Failed to delete held order: ${error.message}`, color: 'red' });
     }
@@ -246,11 +247,11 @@ export function usePosLogic() {
     }
   };
 
-  // THIS IS THE CORRECTED RETURN STATEMENT
   return {
     posView, activeOrder, tables, menu, heldOrders,
     customizingProduct, modifierModalOpened, paymentModalOpened, selectedItemId,
     heldOrdersModalOpened, isLoading, commentModalOpened, commentTarget,
+    keyboardVisible,
     actions: {
       setPosView, handleGoHome, handleSelectDineIn, startOrder,
       handleTableSelect, handleProductSelect, handleConfirmModifiers,
@@ -260,6 +261,7 @@ export function usePosLogic() {
       openHeldOrdersModal, closeHeldOrdersModal,
       handleResumeHeldOrder, handleDeleteHeldOrder, handleClearOrder,
       handleOpenCommentModal, closeCommentModal, handleSaveComment,
+      toggleKeyboard,
     }
   };
 }

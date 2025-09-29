@@ -2,9 +2,11 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Modal, Textarea, Button, Group } from '@mantine/core';
+import { Modal, Textarea, Button, Group, ActionIcon, Title } from '@mantine/core';
+import { IconKeyboard } from '@tabler/icons-react';
+import OnScreenKeyboard from './OnScreenKeyboard';
 
-export default function CommentModal({ opened, onClose, onSave, target }) {
+export default function CommentModal({ opened, onClose, onSave, target, keyboardVisible, onToggleKeyboard }) {
   const [comment, setComment] = useState('');
 
   useEffect(() => {
@@ -17,11 +19,25 @@ export default function CommentModal({ opened, onClose, onSave, target }) {
     onSave(target, comment);
     onClose();
   };
+  
+  const titleText = target?.product ? `Note for ${target.product.name}` : 'Note for Order';
 
-  const title = target?.product ? `Note for ${target.product.name}` : 'Note for Order';
+  const modalHeader = (
+    <Group justify="space-between" style={{ width: '100%' }}>
+      <Title order={4}>{titleText}</Title>
+      <ActionIcon
+        variant={keyboardVisible ? 'filled' : 'outline'}
+        color="blue"
+        onClick={onToggleKeyboard}
+        title="Toggle On-Screen Keyboard"
+      >
+        <IconKeyboard size={20} />
+      </ActionIcon>
+    </Group>
+  );
 
   return (
-    <Modal opened={opened} onClose={onClose} title={title} centered>
+    <Modal opened={opened} onClose={onClose} title={modalHeader} centered size="lg">
       <Textarea
         placeholder="Enter special requests or notes here..."
         value={comment}
@@ -29,6 +45,14 @@ export default function CommentModal({ opened, onClose, onSave, target }) {
         autosize
         minRows={4}
       />
+      
+      {keyboardVisible && (
+        <OnScreenKeyboard
+          value={comment}
+          onChange={setComment}
+        />
+      )}
+
       <Group justify="flex-end" mt="md">
         <Button variant="default" onClick={onClose}>
           Cancel

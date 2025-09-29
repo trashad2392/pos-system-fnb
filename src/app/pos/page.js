@@ -16,7 +16,7 @@ export default function PosPage() {
     posView, activeOrder, tables, menu, heldOrders,
     customizingProduct, modifierModalOpened, paymentModalOpened,
     selectedItemId, heldOrdersModalOpened, isLoading,
-    commentModalOpened, commentTarget,
+    commentModalOpened, commentTarget, keyboardVisible,
     actions
   } = usePosLogic();
 
@@ -88,6 +88,8 @@ export default function PosPage() {
         onClose={actions.closeCommentModal}
         onSave={actions.handleSaveComment}
         target={commentTarget}
+        keyboardVisible={keyboardVisible}
+        onToggleKeyboard={actions.toggleKeyboard}
       />
     </div>
   );

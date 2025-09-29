@@ -5,11 +5,10 @@ import Link from 'next/link';
 import { MantineProvider, ColorSchemeScript } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
-import '@mantine/notifications/styles.css'; // Import notification styles
+import '@mantine/notifications/styles.css';
+// The import for react-simple-keyboard CSS should be removed from this file
 import './globals.css';
 
-// Metadata can be exported from a client component in the App Router
-// export const metadata = { ... }; // This can be kept if you prefer
 
 export default function RootLayout({ children }) {
   return (
@@ -19,7 +18,6 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <MantineProvider>
-          {/* This component will display all our notifications */}
           <Notifications position="top-right" /> 
           
           <nav style={{ padding: '1rem', borderBottom: '1px solid #ddd', marginBottom: '1rem', backgroundColor: '#fff' }}>
