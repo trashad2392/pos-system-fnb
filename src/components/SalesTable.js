@@ -5,12 +5,10 @@ import { Table, Text, Box } from '@mantine/core';
 
 const ClientDateTime = ({ date }) => {
   if (!date) return null;
-  return new Date(date).toLocaleString(); 
+  return new Date(date).toLocaleString();
 };
 
 export default function SalesTable({ sales }) {
-  // Reverse the array to show the oldest sale first, so the # is sequential (1, 2, 3...).
-  // We create a copy with [...sales] to avoid mutating the original prop.
   const displayedSales = [...sales].reverse();
 
   return (
@@ -18,7 +16,6 @@ export default function SalesTable({ sales }) {
       <Table striped highlightOnHover withTableBorder withColumnBorders>
         <Table.Thead>
           <Table.Tr>
-            {/* UPDATED: Header changed */}
             <Table.Th>Sale #</Table.Th>
             <Table.Th>Date & Time</Table.Th>
             <Table.Th>Type</Table.Th>
@@ -28,10 +25,8 @@ export default function SalesTable({ sales }) {
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {/* UPDATED: Mapping over the reversed array */}
           {displayedSales.map((sale, index) => (
             <Table.Tr key={sale.id}>
-              {/* UPDATED: Displaying the index + 1 for a sequential number */}
               <Table.Td>{index + 1}</Table.Td>
               <Table.Td>
                 <ClientDateTime date={sale.createdAt} />
@@ -42,12 +37,15 @@ export default function SalesTable({ sales }) {
                 {sale.items.map((item) => (
                   <Box key={item.id} mb="xs">
                     <Text size="sm" fw={500}>
-                      {item.product.name} (x{item.quantity}) @ ${Number(item.priceAtTimeOfOrder).toFixed(2)}
+                      {item.product.name} (x{item.quantity})
                     </Text>
                     {item.selectedModifiers && item.selectedModifiers.length > 0 && (
                       <Box pl="sm">
                         {item.selectedModifiers.map(mod => (
-                          <Text key={mod.id} size="xs" c="dimmed">&bull; {mod.name}</Text>
+                          <Text key={mod.id} size="xs" c="dimmed">
+                            &bull; {mod.modifierOption.name}
+                            {mod.quantity > 1 ? ` (x${mod.quantity})` : ''}
+                          </Text>
                         ))}
                       </Box>
                     )}

@@ -62,7 +62,7 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
   const [selections, setSelections] = useState({});
   const [totalPrice, setTotalPrice] = useState(0);
   const [lockedCost, setLockedCost] = useState(null);
-  
+
   const prevStep = usePrevious(currentStep);
 
   const sortedModifierGroups = useMemo(() => {
@@ -87,7 +87,7 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
         itemsUsed += quantity;
       }
     }
-    
+
     let effectiveMaxSelections = currentGroup.maxSelectionsSyncedToOptionCount ? currentGroup.options.length : currentGroup.maxSelections;
 
     if (effectiveMaxSelections === null && currentGroup.minSelection === 1 && currentGroup.selectionBudget === 1) {
@@ -134,20 +134,24 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
   const handleNextOrFinish = useCallback(() => {
     const isFinalStep = currentStep === sortedModifierGroups.length - 1;
     if (isFinalStep) {
-      const allSelectedOptionIds = [];
-      Object.keys(selections).forEach(groupId => {
-        Object.keys(selections[groupId]).forEach(optionId => {
-          const quantity = selections[groupId][optionId];
-          for (let i = 0; i < quantity; i++) {
-            allSelectedOptionIds.push(Number(optionId));
-          }
-        });
+      const finalModifiers = [];
+      // This ensures we respect the group display order
+      sortedModifierGroups.forEach(group => {
+        const groupSelections = selections[group.id];
+        if (groupSelections) {
+          Object.entries(groupSelections).forEach(([optionId, quantity]) => {
+            const option = group.options.find(opt => opt.id === Number(optionId));
+            if (option) {
+              finalModifiers.push({ ...option, quantity });
+            }
+          });
+        }
       });
-      onConfirm(product, allSelectedOptionIds);
+      onConfirm(product, finalModifiers);
     } else {
       setCurrentStep(s => s + 1);
     }
-  }, [currentStep, sortedModifierGroups.length, selections, onConfirm, product]);
+  }, [currentStep, sortedModifierGroups, selections, onConfirm, product]);
 
   const handleBack = () => {
     if (currentStep > 0) {
@@ -159,17 +163,17 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
         delete newSelections[prevGroup.id];
         setSelections(newSelections);
       }
-      
+
       setCurrentStep(prevStepIndex);
     }
   };
-  
+
   useEffect(() => {
     const navigatedBackwards = typeof prevStep !== 'undefined' && prevStep > currentStep;
     if (navigatedBackwards || !currentGroup || !opened) {
-      return; 
+      return;
     }
-    
+
     const maxItemsMet = effectiveMaxSelections !== null && itemsUsed >= effectiveMaxSelections;
     const budgetMet = pointsUsed >= currentGroup.selectionBudget;
 
@@ -189,7 +193,7 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
     } else {
       if (effectiveMaxSelections === 1) {
         setSelections({ ...selections, [groupId]: { [option.id]: 1 } });
-        return; 
+        return;
       } else {
         if (isCurrentlySelected) {
           delete newGroupSelections[option.id];
@@ -199,8 +203,6 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
       }
     }
 
-    // --- THIS IS THE FIX ---
-    // Only apply cost locking for exact budget groups
     if (currentGroup.exactBudgetRequired) {
       const isFirstSelection = Object.keys(groupSelections).length === 0 && !isCurrentlySelected;
       const isLastSelection = Object.keys(newGroupSelections).length === 0;
@@ -211,7 +213,7 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
         setLockedCost(null);
       }
     }
-    
+
     let tempItemsUsed = 0;
     let tempPointsUsed = 0;
     for (const optId in newGroupSelections) {
@@ -231,13 +233,13 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
 
   const buttonState = useMemo(() => {
     if (!currentGroup) return { show: false };
-    
+
     const isFixedQuantity = effectiveMaxSelections !== null && currentGroup.minSelection === effectiveMaxSelections;
-    
+
     if (isFixedQuantity || currentGroup.exactBudgetRequired) {
       return { show: false };
     }
-    
+
     if (!isMinMet) {
       return { show: false };
     }
@@ -247,7 +249,7 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
     if (currentGroup.minSelection === 0 && itemsUsed === 0) {
       text = 'Skip';
     }
-    
+
     return { show: true, text, enabled: isMinMet };
   }, [currentGroup, itemsUsed, currentStep, sortedModifierGroups.length, effectiveMaxSelections, isMinMet]);
 
@@ -264,55 +266,53 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
         <Grid.Col span={8}>
           <Progress value={((currentStep + 1) / sortedModifierGroups.length) * 100} mb="md" />
           <Box style={{ minHeight: '50vh', position: 'relative' }}>
-              <Group justify="space-between">
-                <Title order={4}>{currentGroup.name}</Title>
-                <Text size="sm" c="dimmed">Points used: {pointsUsed} / {currentGroup.selectionBudget}</Text>
-              </Group>
-              <Text size="sm" c="dimmed">
-                {currentGroup.minSelection > 0 ? `Choose at least ${currentGroup.minSelection}.` : 'Optional.'}
-                {effectiveMaxSelections !== null && ` Choose up to ${effectiveMaxSelections}.`}
-              </Text>
-              <Divider my="md" />
-              
-              <ScrollArea style={{ height: 'calc(50vh - 80px)' }}>
-                <Group mt="xs" gap="md">
-                  {currentGroup.options
-                    .filter(option => {
-                      const isSelected = !!(selections[currentGroup.id] && selections[currentGroup.id][option.id]);
-                      // --- THIS IS THE FIX ---
-                      // Only apply lockedCost filter if it's set (for exact budget groups)
-                      if (lockedCost !== null && option.selectionCost !== lockedCost) {
-                        return false;
-                      }
-                      if (!isSelected && (pointsUsed + option.selectionCost > currentGroup.selectionBudget)) {
-                        return false;
-                      }
-                      return true;
-                    })
-                    .map(option => {
-                      const quantity = (selections[currentGroup.id] && selections[currentGroup.id][option.id]) || 0;
-                      return (
-                        <Chip
-                          key={option.id}
-                          value={option.id.toString()}
-                          checked={quantity > 0}
-                          onChange={() => handleSelectionChange(currentGroup.id, option)}
-                          variant="outline"
-                          size="lg"
-                          radius="md"
-                        >
-                          <Group gap="xs">
-                            <Text>{option.name}</Text>
-                            {currentGroup.allowRepeatedSelections && quantity > 0 && (<Badge variant="light" size="lg">{quantity}</Badge>)}
-                            <Text size="sm" c="dimmed">
-                              ({option.selectionCost}pt) {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
-                            </Text>
-                          </Group>
-                        </Chip>
-                      );
+            <Group justify="space-between">
+              <Title order={4}>{currentGroup.name}</Title>
+              <Text size="sm" c="dimmed">Points used: {pointsUsed} / {currentGroup.selectionBudget}</Text>
+            </Group>
+            <Text size="sm" c="dimmed">
+              {currentGroup.minSelection > 0 ? `Choose at least ${currentGroup.minSelection}.` : 'Optional.'}
+              {effectiveMaxSelections !== null && ` Choose up to ${effectiveMaxSelections}.`}
+            </Text>
+            <Divider my="md" />
+
+            <ScrollArea style={{ height: 'calc(50vh - 80px)' }}>
+              <Group mt="xs" gap="md">
+                {currentGroup.options
+                  .filter(option => {
+                    const isSelected = !!(selections[currentGroup.id] && selections[currentGroup.id][option.id]);
+                    if (lockedCost !== null && option.selectionCost !== lockedCost) {
+                      return false;
+                    }
+                    if (!isSelected && (pointsUsed + option.selectionCost > currentGroup.selectionBudget)) {
+                      return false;
+                    }
+                    return true;
+                  })
+                  .map(option => {
+                    const quantity = (selections[currentGroup.id] && selections[currentGroup.id][option.id]) || 0;
+                    return (
+                      <Chip
+                        key={option.id}
+                        value={option.id.toString()}
+                        checked={quantity > 0}
+                        onChange={() => handleSelectionChange(currentGroup.id, option)}
+                        variant="outline"
+                        size="lg"
+                        radius="md"
+                      >
+                        <Group gap="xs">
+                          <Text>{option.name}</Text>
+                          {currentGroup.allowRepeatedSelections && quantity > 0 && (<Badge variant="light" size="lg">{quantity}</Badge>)}
+                          <Text size="sm" c="dimmed">
+                            ({option.selectionCost}pt) {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
+                          </Text>
+                        </Group>
+                      </Chip>
+                    );
                   })}
-                </Group>
-              </ScrollArea>
+              </Group>
+            </ScrollArea>
           </Box>
         </Grid.Col>
       </Grid>

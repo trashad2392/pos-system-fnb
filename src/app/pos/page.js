@@ -9,26 +9,28 @@ import OrderView from './components/OrderView';
 import ModifierModal from './components/ModifierModal';
 import PaymentModal from './components/PaymentModal';
 import HeldOrdersModal from './components/HeldOrdersModal';
+import CommentModal from './components/CommentModal';
 
 export default function PosPage() {
   const {
     posView, activeOrder, tables, menu, heldOrders,
     customizingProduct, modifierModalOpened, paymentModalOpened,
     selectedItemId, heldOrdersModalOpened, isLoading,
+    commentModalOpened, commentTarget,
     actions
   } = usePosLogic();
-  
+
   if (isLoading) {
     return <Center style={{ height: '100vh' }}><Loader /></Center>;
   }
 
   const renderView = () => {
-    switch(posView) {
+    switch (posView) {
       case 'order-view':
-        return <OrderView 
-          order={activeOrder} 
-          onBack={actions.handleGoHome} 
-          menu={menu} 
+        return <OrderView
+          order={activeOrder}
+          onBack={actions.handleGoHome}
+          menu={menu}
           onProductSelect={actions.handleProductSelect}
           onUpdateQuantity={actions.handleUpdateItemQuantity}
           onRemoveItem={actions.handleRemoveItem}
@@ -37,16 +39,17 @@ export default function PosPage() {
           onClearOrder={actions.handleClearOrder}
           selectedItemId={selectedItemId}
           onSelectItem={actions.handleSelectItem}
+          onOpenCommentModal={actions.handleOpenCommentModal}
         />;
       case 'table-select':
-         return <TableSelectView 
-          tables={tables} 
+        return <TableSelectView
+          tables={tables}
           onTableSelect={actions.handleTableSelect}
           onBack={actions.handleGoHome}
         />;
       case 'home':
       default:
-        return <PosHomeView 
+        return <PosHomeView
           onSelectDineIn={actions.handleSelectDineIn}
           onStartOrder={actions.startOrder}
         />;
@@ -56,14 +59,14 @@ export default function PosPage() {
   return (
     <div>
       {renderView()}
-      
+
       <ModifierModal
         product={customizingProduct}
         opened={modifierModalOpened}
         onClose={actions.closeModifierModal}
         onConfirm={actions.handleConfirmModifiers}
       />
-      
+
       <PaymentModal
         order={activeOrder}
         opened={paymentModalOpened}
@@ -71,13 +74,20 @@ export default function PosPage() {
         onConfirmPayment={actions.handleFinalizeOrder}
       />
 
-      <HeldOrdersModal 
+      <HeldOrdersModal
         opened={heldOrdersModalOpened}
         onClose={actions.closeHeldOrdersModal}
         heldOrders={heldOrders}
         onResume={actions.handleResumeHeldOrder}
         onDelete={actions.handleDeleteHeldOrder}
         orderType={activeOrder?.orderType}
+      />
+
+      <CommentModal
+        opened={commentModalOpened}
+        onClose={actions.closeCommentModal}
+        onSave={actions.handleSaveComment}
+        target={commentTarget}
       />
     </div>
   );

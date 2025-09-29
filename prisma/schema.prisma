@@ -11,52 +11,44 @@ datasource db {
   url      = "file:./prisma/dev.db"
 }
 
-// -- MENU MODELS --
-
 model Category {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  sku       String    @unique @default(uuid())
-  products  Product[]
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  sku      String    @unique @default(uuid())
+  products Product[]
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
-  name        String
-  sku         String   @unique
-  price       Float
-  description String?
-  isArchived  Boolean  @default(false)
-  
-  categoryId  Int
-  category    Category @relation(fields: [categoryId], references: [id])
-  
+  id             Int      @id @default(autoincrement())
+  name           String
+  sku            String   @unique
+  price          Float
+  description    String?
+  isArchived     Boolean  @default(false)
+  categoryId     Int
+  category       Category @relation(fields: [categoryId], references: [id])
   modifierGroups ProductModifierGroup[]
-
-  orderItems  OrderItem[]
+  orderItems     OrderItem[]
 }
 
 model ModifierGroup {
-  id              Int      @id @default(autoincrement())
-  name            String
-  minSelection    Int      @default(0)
-  selectionBudget Int      @default(1)
-  maxSelections                     Int? 
-  maxSelectionsSyncedToOptionCount  Boolean   @default(false) 
-  allowRepeatedSelections           Boolean   @default(false) 
-  exactBudgetRequired               Boolean   @default(false)
-  options         ModifierOption[]
-
-  products        ProductModifierGroup[]
+  id                             Int      @id @default(autoincrement())
+  name                           String
+  minSelection                   Int      @default(0)
+  selectionBudget                Int      @default(1)
+  maxSelections                  Int?
+  maxSelectionsSyncedToOptionCount Boolean  @default(false)
+  allowRepeatedSelections        Boolean  @default(false)
+  exactBudgetRequired            Boolean  @default(false)
+  options                        ModifierOption[]
+  products                       ProductModifierGroup[]
 }
 
 model ProductModifierGroup {
-  id              Int      @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   displayOrder    Int
-
   product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId       Int
-
   group           ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
   modifierGroupId Int
 
@@ -64,51 +56,55 @@ model ProductModifierGroup {
 }
 
 model ModifierOption {
-  id              Int      @id @default(autoincrement())
+  id              Int                 @id @default(autoincrement())
   name            String
-  priceAdjustment Float    @default(0)
-  selectionCost   Int      @default(1)
-  
+  priceAdjustment Float               @default(0)
+  selectionCost   Int                 @default(1)
   modifierGroupId Int
-  modifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
-  
-  orderItems      OrderItem[] @relation("OrderItemModifiers")
+  modifierGroup   ModifierGroup       @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  orderItems      OrderItemModifier[]
 }
 
-
-// -- OPERATIONS MODELS --
-
 model Table {
-  id      Int     @id @default(autoincrement())
-  name    String  @unique
-  status  String  @default("AVAILABLE")
-  orders  Order[]
+  id     Int     @id @default(autoincrement())
+  name   String  @unique
+  status String  @default("AVAILABLE")
+  orders Order[]
 }
 
 model Order {
-  id            Int      @id @default(autoincrement())
-  status        String   @default("OPEN")
-  orderType     String   @default("Dine-In")
+  id            Int         @id @default(autoincrement())
+  status        String      @default("OPEN")
+  orderType     String      @default("Dine-In")
   paymentMethod String?
-  totalAmount   Float    @default(0)
-  createdAt     DateTime @default(now())
-  
+  totalAmount   Float       @default(0)
+  createdAt     DateTime    @default(now())
   tableId       Int?
-  table         Table?   @relation(fields: [tableId], references: [id])
-  
+  table         Table?      @relation(fields: [tableId], references: [id])
   items         OrderItem[]
+  comment       String?     // NEW: Field for order-level comments
 }
 
 model OrderItem {
-  id                 Int      @id @default(autoincrement())
+  id                 Int                 @id @default(autoincrement())
   quantity           Int
   priceAtTimeOfOrder Float
-  
   orderId            Int
-  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
+  order              Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId          Int
-  product            Product  @relation(fields: [productId], references: [id])
-  
-  selectedModifiers  ModifierOption[] @relation("OrderItemModifiers")
+  product            Product             @relation(fields: [productId], references: [id])
+  selectedModifiers  OrderItemModifier[]
+  comment            String?             // NEW: Field for item-level comments
+}
+
+model OrderItemModifier {
+  id               Int            @id @default(autoincrement())
+  orderItemId      Int
+  orderItem        OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifierOptionId Int
+  modifierOption   ModifierOption @relation(fields: [modifierOptionId], references: [id], onDelete: Cascade)
+  quantity         Int
+  displayOrder     Int
+
+  @@unique([orderItemId, modifierOptionId, displayOrder])
 }

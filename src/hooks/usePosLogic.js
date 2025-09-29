@@ -8,19 +8,48 @@ import { notifications } from '@mantine/notifications';
 
 export function usePosLogic() {
   const { tables, menu, isLoading, refreshData } = usePosData();
-  
+
   // --- STATE MANAGEMENT ---
   const [activeOrder, setActiveOrder] = useState(null);
-  const [posView, setPosView] = useState('home'); // 'home', 'table-select', 'order-view'
+  const [posView, setPosView] = useState('home');
   const [heldOrders, setHeldOrders] = useState([]);
   const [customizingProduct, setCustomizingProduct] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
+  const [commentTarget, setCommentTarget] = useState(null);
   const [modifierModalOpened, { open: openModifierModal, close: closeModifierModal }] = useDisclosure(false);
   const [paymentModalOpened, { open: openPaymentModal, close: closePaymentModal }] = useDisclosure(false);
   const [heldOrdersModalOpened, { open: openHeldOrdersModal, close: closeHeldOrdersModal }] = useDisclosure(false);
-  
-  // --- HANDLER FUNCTIONS ---
+  const [commentModalOpened, { open: openCommentModal, close: closeCommentModal }] = useDisclosure(false);
 
+  // --- NEW COMMENT HANDLERS ---
+  const handleOpenCommentModal = (target) => {
+    setCommentTarget(target);
+    openCommentModal();
+  };
+
+  const handleSaveComment = async (target, comment) => {
+    if (!activeOrder) return;
+    try {
+      let updatedOrder;
+      if (target.product) { // It's an order item
+        updatedOrder = await window.api.updateItemComment({
+          orderId: activeOrder.id,
+          orderItemId: target.id,
+          comment,
+        });
+      } else { // It's the whole order
+        updatedOrder = await window.api.updateOrderComment({
+          orderId: activeOrder.id,
+          comment,
+        });
+      }
+      setActiveOrder(updatedOrder);
+      notifications.show({ title: 'Success', message: 'Note saved.', color: 'green' });
+    } catch (error) {
+      notifications.show({ title: 'Error', message: `Failed to save note: ${error.message}`, color: 'red' });
+    }
+  };
+  
   const startOrder = async (orderType, tableId = null) => {
     try {
       const newOrder = await window.api.createOrder({ tableId, orderType });
@@ -151,13 +180,13 @@ export function usePosLogic() {
     }
   };
   
-  const handleAddItem = async (product, selectedModifierIds = []) => {
+  const handleAddItem = async (product, selectedModifiers = []) => {
     if (!activeOrder) return;
     try {
       const updatedOrder = await window.api.addItemToOrder({
         orderId: activeOrder.id,
         productId: product.id,
-        selectedModifierIds,
+        selectedModifiers,
       });
       setActiveOrder(updatedOrder);
       if (updatedOrder.items && updatedOrder.items.length > 0) {
@@ -199,8 +228,8 @@ export function usePosLogic() {
     }
   };
 
-  const handleConfirmModifiers = (product, selectedIds) => {
-    handleAddItem(product, selectedIds);
+  const handleConfirmModifiers = (product, selectedModifiers) => {
+    handleAddItem(product, selectedModifiers);
     closeModifierModal();
   };
 
@@ -217,10 +246,11 @@ export function usePosLogic() {
     }
   };
 
+  // THIS IS THE CORRECTED RETURN STATEMENT
   return {
     posView, activeOrder, tables, menu, heldOrders,
     customizingProduct, modifierModalOpened, paymentModalOpened, selectedItemId,
-    heldOrdersModalOpened, isLoading,
+    heldOrdersModalOpened, isLoading, commentModalOpened, commentTarget,
     actions: {
       setPosView, handleGoHome, handleSelectDineIn, startOrder,
       handleTableSelect, handleProductSelect, handleConfirmModifiers,
@@ -229,6 +259,7 @@ export function usePosLogic() {
       closePaymentModal, handleFinalizeOrder, handleHold,
       openHeldOrdersModal, closeHeldOrdersModal,
       handleResumeHeldOrder, handleDeleteHeldOrder, handleClearOrder,
+      handleOpenCommentModal, closeCommentModal, handleSaveComment,
     }
   };
 }

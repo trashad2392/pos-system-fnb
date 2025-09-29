@@ -3,22 +3,22 @@
 
 import { useState, useEffect } from 'react';
 import { Title, Grid, Button, Paper, Text, Group, Tabs, ScrollArea, Divider, Center, Box, ActionIcon } from '@mantine/core';
-import { IconArrowLeft, IconPlus, IconMinus, IconX, IconDeviceFloppy, IconEraser } from '@tabler/icons-react';
+import { IconArrowLeft, IconDeviceFloppy, IconEraser, IconX, IconPencil } from '@tabler/icons-react';
 import Keypad from './Keypad';
 
-// UPDATED: The signature is simpler, onShowHeldOrders is removed
-export default function OrderView({ 
-  order, 
-  onBack, 
-  menu, 
-  onProductSelect, 
-  onUpdateQuantity, 
-  onRemoveItem, 
-  onFinalize, 
+export default function OrderView({
+  order,
+  onBack,
+  menu,
+  onProductSelect,
+  onUpdateQuantity,
+  onRemoveItem,
+  onFinalize,
   onHold,
   onClearOrder,
-  selectedItemId, 
-  onSelectItem 
+  selectedItemId,
+  onSelectItem,
+  onOpenCommentModal
 }) {
   const { categories, products } = menu;
   const defaultCategory = categories.length > 0 ? categories[0].id.toString() : null;
@@ -61,20 +61,34 @@ export default function OrderView({
     onUpdateQuantity(selectedItemId, 1);
   };
 
+  const calculateItemTotal = (item) => {
+    const basePrice = item.priceAtTimeOfOrder;
+    const modifiersPrice = item.selectedModifiers.reduce((acc, mod) => {
+      return acc + (mod.modifierOption.priceAdjustment * mod.quantity);
+    }, 0);
+    return (basePrice + modifiersPrice) * item.quantity;
+  };
+
   return (
     <Grid>
       <Grid.Col span={5}>
         <Group justify="space-between" mb="md">
-           <Title order={2}>Current Order</Title>
+          <Title order={2}>Current Order</Title>
         </Group>
         <Paper withBorder style={{ height: '85vh', display: 'flex', flexDirection: 'column' }}>
           <ScrollArea style={{ flex: 1 }}>
             <Box p="xs">
+              {order.comment && (
+                <Paper withBorder p="xs" mb="xs" bg="yellow.0">
+                  <Text size="sm" fw={500}>Order Note:</Text>
+                  <Text size="sm" c="dimmed" style={{ whiteSpace: 'pre-wrap' }}>{order.comment}</Text>
+                </Paper>
+              )}
               {!isCartEmpty ? (
                 order.items.map(item => (
-                  <Box key={item.id} onClick={() => onSelectItem(item.id)} style={{cursor: 'pointer'}}>
+                  <Box key={item.id} onClick={() => onSelectItem(item.id)} style={{ cursor: 'pointer' }}>
                     <Paper withBorder p="xs" mb="xs" shadow={selectedItemId === item.id ? 'md' : 'xs'}
-                      style={ selectedItemId === item.id ? { border: `1px solid var(--mantine-color-blue-6)` } : {} }
+                      style={selectedItemId === item.id ? { border: `1px solid var(--mantine-color-blue-6)` } : {}}
                     >
                       <Group justify="space-between">
                         <Text fw={500}>{item.product.name}</Text>
@@ -82,18 +96,25 @@ export default function OrderView({
                           <IconX size={16} />
                         </ActionIcon>
                       </Group>
+                      {item.comment && (
+                         <Text size="xs" c="blue.8" fs="italic" mt={-5} mb={5} pl="sm" style={{ whiteSpace: 'pre-wrap' }}>
+                           &bull; {item.comment}
+                         </Text>
+                      )}
                       {item.selectedModifiers && item.selectedModifiers.length > 0 && (
                         <Box pl="sm" mt={-5} mb={5}>
                           {item.selectedModifiers.map(mod => (
                             <Text key={mod.id} size="xs" c="dimmed">
-                              &bull; {mod.name} {mod.priceAdjustment > 0 ? `(+$${mod.priceAdjustment.toFixed(2)})` : ''}
+                              &bull; {mod.modifierOption.name}
+                              {mod.quantity > 1 ? ` (x${mod.quantity})` : ''}
+                              {mod.modifierOption.priceAdjustment > 0 ? ` (+$${(mod.modifierOption.priceAdjustment * mod.quantity).toFixed(2)})` : ''}
                             </Text>
                           ))}
                         </Box>
                       )}
                       <Group justify="space-between" mt="xs">
                         <Text size="lg" fw={700}>Qty: {item.quantity}</Text>
-                        <Text fw={500}>${(item.quantity * item.priceAtTimeOfOrder).toFixed(2)}</Text>
+                        <Text fw={500}>${calculateItemTotal(item).toFixed(2)}</Text>
                       </Group>
                     </Paper>
                   </Box>
@@ -103,18 +124,39 @@ export default function OrderView({
               )}
             </Box>
           </ScrollArea>
-          
+
           <Box>
             <Divider />
-            <Keypad 
-              onNumberPress={handleNumberPress} 
-              onBackspace={handleBackspace} 
-              onClear={handleClear} 
-              disabled={selectedItemId === null} 
+            <Keypad
+              onNumberPress={handleNumberPress}
+              onBackspace={handleBackspace}
+              onClear={handleClear}
+              disabled={selectedItemId === null}
             />
           </Box>
 
           <Box p="md" pt={0}>
+             <Group grow mb="sm">
+              <Button
+                variant="default"
+                leftSection={<IconPencil size={16} />}
+                onClick={() => onOpenCommentModal(order)}
+                disabled={isCartEmpty}
+              >
+                Order Note
+              </Button>
+              <Button
+                variant="default"
+                leftSection={<IconPencil size={16} />}
+                onClick={() => {
+                  const item = order.items.find(i => i.id === selectedItemId);
+                  if (item) onOpenCommentModal(item);
+                }}
+                disabled={!selectedItemId}
+              >
+                Item Note
+              </Button>
+            </Group>
             <Divider my="sm" />
             <Group justify="space-between">
               <Title order={3}>Total:</Title>
@@ -127,24 +169,24 @@ export default function OrderView({
                   fullWidth
                   variant="outline"
                   leftSection={<IconDeviceFloppy size={20} />}
-                  onClick={onHold} // UPDATED: This button now has one, simple job
+                  onClick={onHold}
                   disabled={order.orderType === 'Dine-In'}
                 >
                   {isCartEmpty ? 'View Held' : 'Hold Order'}
                 </Button>
               </Grid.Col>
               <Grid.Col span={6}>
-                 <Button 
-                    size="lg" 
-                    fullWidth 
-                    variant="outline" 
-                    color="red"
-                    leftSection={<IconEraser size={20} />}
-                    disabled={isCartEmpty}
-                    onClick={onClearOrder}
-                  >
-                      Clear Cart
-                  </Button>
+                <Button
+                  size="lg"
+                  fullWidth
+                  variant="outline"
+                  color="red"
+                  leftSection={<IconEraser size={20} />}
+                  disabled={isCartEmpty}
+                  onClick={onClearOrder}
+                >
+                  Clear Cart
+                </Button>
               </Grid.Col>
               <Grid.Col span={12}>
                 <Button size="lg" fullWidth disabled={isCartEmpty} onClick={onFinalize}>
@@ -177,8 +219,8 @@ export default function OrderView({
                   <Grid>
                     {products.filter(p => p.categoryId === cat.id).map(product => (
                       <Grid.Col span={4} key={product.id}>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           style={{ height: '100px', width: '100%', padding: '8px' }}
                           onClick={() => onProductSelect(product)}
                         >

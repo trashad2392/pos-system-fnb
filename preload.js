@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('api', {
   resumeHeldOrder: (data) => ipcRenderer.invoke('resume-held-order', data),
   deleteHeldOrder: (data) => ipcRenderer.invoke('delete-held-order', data),
   clearOrder: (data) => ipcRenderer.invoke('clear-order', data),
+  updateItemComment: (data) => ipcRenderer.invoke('update-item-comment', data), // NEW
+  updateOrderComment: (data) => ipcRenderer.invoke('update-order-comment', data), // NEW
 
   // Category Functions
   getCategories: () => ipcRenderer.invoke('get-categories'),
