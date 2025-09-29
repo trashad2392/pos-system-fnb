@@ -11,6 +11,7 @@
     "lint": "next lint",
     "generate": "npx prisma generate",
     "migrate": "npx prisma migrate dev",
+    "seed": "node scripts/seed.js",
     "dev:electron": "concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "build:prisma": "node scripts/build-prisma.js",
     "build:electron": "npm run generate && npm run build:prisma && next build && electron-builder --win --mac --linux"

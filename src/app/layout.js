@@ -1,12 +1,12 @@
 // src/app/layout.js
 "use client";
 
-import Link from 'next/link';
 import { MantineProvider, ColorSchemeScript } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
+import { AuthProvider } from '../context/AuthContext'; 
+import AppContent from './AppContent';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
-// The import for react-simple-keyboard CSS should be removed from this file
 import './globals.css';
 
 
@@ -18,16 +18,17 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <MantineProvider>
-          <Notifications position="top-right" /> 
+          {/* --- START OF CHANGE --- */}
+          {/* You can change the autoClose value to any number in milliseconds. */}
+          {/* For example, 6000 is 6 seconds. */}
+          <Notifications position="top-right" autoClose={1500} />
+          {/* --- END OF CHANGE --- */}
           
-          <nav style={{ padding: '1rem', borderBottom: '1px solid #ddd', marginBottom: '1rem', backgroundColor: '#fff' }}>
-            <Link href="/" style={{ marginRight: '1rem', textDecoration: 'none', color: 'blue' }}>Inventory</Link>
-            <Link href="/pos" style={{ marginRight: '1rem', textDecoration: 'none', color: 'blue' }}>Point of Sale</Link>
-            <Link href="/sales" style={{ textDecoration: 'none', color: 'blue' }}>Sales</Link>
-          </nav>
-          <main style={{ padding: '0 2rem' }}>
-            {children}
-          </main>
+          <AuthProvider>
+            <AppContent>
+              {children}
+            </AppContent>
+          </AuthProvider>
         </MantineProvider>
       </body>
     </html>

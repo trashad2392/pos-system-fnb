@@ -82,7 +82,9 @@ model Order {
   tableId       Int?
   table         Table?      @relation(fields: [tableId], references: [id])
   items         OrderItem[]
-  comment       String?     // NEW: Field for order-level comments
+  comment       String?
+  userId        Int?
+  user          User?       @relation(fields: [userId], references: [id])
 }
 
 model OrderItem {
@@ -94,7 +96,7 @@ model OrderItem {
   productId          Int
   product            Product             @relation(fields: [productId], references: [id])
   selectedModifiers  OrderItemModifier[]
-  comment            String?             // NEW: Field for item-level comments
+  comment            String?
 }
 
 model OrderItemModifier {
@@ -107,4 +109,24 @@ model OrderItemModifier {
   displayOrder     Int
 
   @@unique([orderItemId, modifierOptionId, displayOrder])
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  name       String
+  pin        String? // Storing PIN as a string. In a real app, this should be hashed.
+  role       String   @default("Cashier") // e.g., "Cashier", "Manager", "Admin"
+  hourlyRate Float?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  shifts     Shift[]
+  orders     Order[]
+}
+
+model Shift {
+  id       Int      @id @default(autoincrement())
+  clockIn  DateTime @default(now())
+  clockOut DateTime?
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id])
 }

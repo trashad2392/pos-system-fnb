@@ -2,12 +2,14 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { Title, Button, Group, Tabs } from '@mantine/core';
+import { useAuth } from '@/context/AuthContext';
 import CategoryManager from '@/components/management/CategoryManager';
 import ProductManager from '@/components/management/ProductManager';
 import ModifierManager from '@/components/management/ModifierManager';
 import TableManager from '@/components/management/TableManager';
 
 export default function InventoryPage() {
+  const { isManager } = useAuth();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [rawCategories, setRawCategories] = useState([]);
@@ -56,7 +58,7 @@ export default function InventoryPage() {
     <div>
       <Group justify="space-between" mb="xl">
         <Title order={1}>Inventory & Menu Management</Title>
-        <Button onClick={handleImportMenu} variant="outline">Import Menu</Button>
+        {isManager && <Button onClick={handleImportMenu} variant="outline">Import Menu</Button>}
       </Group>
 
       <Tabs defaultValue="products">

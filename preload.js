@@ -12,8 +12,8 @@ contextBridge.exposeInMainWorld('api', {
   getSales: () => ipcRenderer.invoke('get-sales'),
   getSalesByDateRange: (range) => ipcRenderer.invoke('get-sales-by-date-range', range),
   getSalesStats: (range) => ipcRenderer.invoke('get-sales-stats', range),
-  getSalesComparison: (range) => ipcRenderer.invoke('get-sales-comparison', range), // NEW
-  getDailySalesForRange: (range) => ipcRenderer.invoke('get-daily-sales-for-range', range), // NEW
+  getSalesComparison: (range) => ipcRenderer.invoke('get-sales-comparison', range),
+  getDailySalesForRange: (range) => ipcRenderer.invoke('get-daily-sales-for-range', range),
   createOrder: (data) => ipcRenderer.invoke('create-order', data),
   getOpenOrderForTable: (tableId) => ipcRenderer.invoke('get-open-order-for-table', tableId),
   addItemToOrder: (data) => ipcRenderer.invoke('add-item-to-order', data),
@@ -52,4 +52,15 @@ contextBridge.exposeInMainWorld('api', {
   addTable: (name) => ipcRenderer.invoke('add-table', name),
   updateTable: (data) => ipcRenderer.invoke('update-table', data),
   deleteTable: (id) => ipcRenderer.invoke('delete-table', id),
+
+  // --- NEW: User & Shift Functions ---
+  getUsers: () => ipcRenderer.invoke('get-users'),
+  addUser: (data) => ipcRenderer.invoke('add-user', data),
+  updateUser: (data) => ipcRenderer.invoke('update-user', data),
+  deleteUser: (id) => ipcRenderer.invoke('delete-user', id),
+  login: (pin) => ipcRenderer.invoke('login', pin),
+  logout: () => ipcRenderer.invoke('logout'),
+  getActiveUser: () => ipcRenderer.invoke('get-active-user'),
+  clockOut: () => ipcRenderer.invoke('clock-out'),
+  getCurrentShift: (userId) => ipcRenderer.invoke('get-current-shift', userId),
 });
