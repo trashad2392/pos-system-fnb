@@ -7,7 +7,7 @@ import { usePosData } from './usePosData';
 import { notifications } from '@mantine/notifications';
 
 export function usePosLogic() {
-  const { tables, menu, isLoading, refreshData } = usePosData();
+  const { tables, menu, discounts, isLoading, refreshData } = usePosData(); // <-- ADD DISCOUNTS
 
   const [activeOrder, setActiveOrder] = useState(null);
   const [posView, setPosView] = useState('home');
@@ -16,10 +16,53 @@ export function usePosLogic() {
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [commentTarget, setCommentTarget] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // --- START: ADD DISCOUNT MODAL STATE ---
+  const [discountTarget, setDiscountTarget] = useState(null);
+  const [discountModalOpened, { open: openDiscountModal, close: closeDiscountModal }] = useDisclosure(false);
+  // --- END: ADD DISCOUNT MODAL STATE ---
+
   const [modifierModalOpened, { open: openModifierModal, close: closeModifierModal }] = useDisclosure(false);
   const [paymentModalOpened, { open: openPaymentModal, close: closePaymentModal }] = useDisclosure(false);
   const [heldOrdersModalOpened, { open: openHeldOrdersModal, close: closeHeldOrdersModal }] = useDisclosure(false);
   const [commentModalOpened, { open: openCommentModal, close: closeCommentModal }] = useDisclosure(false);
+
+  // --- START: DISCOUNT HANDLERS ---
+  const handleOpenDiscountModal = (target) => {
+    setDiscountTarget(target);
+    openDiscountModal();
+  };
+
+  const handleSelectDiscount = async (discountId) => {
+    if (!activeOrder || !discountTarget) return;
+
+    try {
+      let updatedOrder;
+      if (discountTarget.product) { // It's an order item
+        updatedOrder = await window.api.applyDiscountToItem({
+          orderId: activeOrder.id,
+          orderItemId: discountTarget.id,
+          discountId: discountId, // Can be null to remove
+        });
+      } else { // It's the whole order
+        updatedOrder = await window.api.applyDiscountToOrder({
+          orderId: activeOrder.id,
+          discountId: discountId, // Can be null to remove
+        });
+      }
+      setActiveOrder(updatedOrder);
+      notifications.show({
+        title: 'Success',
+        message: discountId ? 'Discount applied.' : 'Discount removed.',
+        color: 'green',
+      });
+    } catch (error) {
+      notifications.show({ title: 'Error', message: `Failed to apply discount: ${error.message}`, color: 'red' });
+    } finally {
+      closeDiscountModal();
+    }
+  };
+  // --- END: DISCOUNT HANDLERS ---
 
   const toggleKeyboard = () => setKeyboardVisible((v) => !v);
 
@@ -106,11 +149,11 @@ export function usePosLogic() {
     }
   };
   
-  const handleFinalizeOrder = async (paymentMethod) => {
+  const handleFinalizeOrder = async (payments) => {
     if (!activeOrder) return;
     const orderType = activeOrder.orderType;
     try {
-      await window.api.finalizeOrder({ orderId: activeOrder.id, paymentMethod: paymentMethod });
+      await window.api.finalizeOrder({ orderId: activeOrder.id, payments: payments });
       notifications.show({ title: 'Success', message: 'Order finalized successfully!', color: 'green' });
       closePaymentModal();
       if (orderType === 'Dine-In') {
@@ -120,6 +163,30 @@ export function usePosLogic() {
       }
     } catch (error) {
       notifications.show({ title: 'Error', message: `Failed to finalize order: ${error.message}`, color: 'red' });
+    }
+  };
+
+  const handleFastCash = async () => {
+    if (!activeOrder || !activeOrder.items || activeOrder.items.length === 0) return;
+
+    const payments = [{
+      method: 'Cash',
+      amount: activeOrder.totalAmount,
+    }];
+    
+    const orderType = activeOrder.orderType;
+
+    try {
+      await window.api.finalizeOrder({ orderId: activeOrder.id, payments });
+      notifications.show({ title: 'Success', message: 'Order paid in cash!', color: 'green' });
+      
+      if (orderType === 'Dine-In') {
+        handleGoHome();
+      } else {
+        startOrder(orderType);
+      }
+    } catch (error) {
+      notifications.show({ title: 'Error', message: `Failed to finalize with fast cash: ${error.message}`, color: 'red' });
     }
   };
 
@@ -248,10 +315,11 @@ export function usePosLogic() {
   };
 
   return {
-    posView, activeOrder, tables, menu, heldOrders,
+    posView, activeOrder, tables, menu, heldOrders, discounts, // <-- EXPORT DISCOUNTS
     customizingProduct, modifierModalOpened, paymentModalOpened, selectedItemId,
     heldOrdersModalOpened, isLoading, commentModalOpened, commentTarget,
     keyboardVisible,
+    discountTarget, discountModalOpened, // <-- EXPORT DISCOUNT STATE
     actions: {
       setPosView, handleGoHome, handleSelectDineIn, startOrder,
       handleTableSelect, handleProductSelect, handleConfirmModifiers,
@@ -262,6 +330,12 @@ export function usePosLogic() {
       handleResumeHeldOrder, handleDeleteHeldOrder, handleClearOrder,
       handleOpenCommentModal, closeCommentModal, handleSaveComment,
       toggleKeyboard,
+      handleFastCash,
+      // --- START: EXPORT DISCOUNT ACTIONS ---
+      handleOpenDiscountModal,
+      closeDiscountModal,
+      handleSelectDiscount,
+      // --- END: EXPORT DISCOUNT ACTIONS ---
     }
   };
 }

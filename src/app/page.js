@@ -7,6 +7,7 @@ import CategoryManager from '@/components/management/CategoryManager';
 import ProductManager from '@/components/management/ProductManager';
 import ModifierManager from '@/components/management/ModifierManager';
 import TableManager from '@/components/management/TableManager';
+import DiscountManager from '@/components/management/DiscountManager'; // <-- ADD THIS IMPORT
 
 export default function InventoryPage() {
   const { isManager } = useAuth();
@@ -16,22 +17,36 @@ export default function InventoryPage() {
   const [modifierGroups, setModifierGroups] = useState([]);
   const [rawModifierGroups, setRawModifierGroups] = useState([]);
   const [tables, setTables] = useState([]);
+  const [discounts, setDiscounts] = useState([]); // <-- ADD DISCOUNT STATE
 
   const fetchData = async () => {
     try {
-      const productData = await window.api.getProducts();
+      // Fetch all data in parallel
+      const [
+        productData, 
+        categoryData, 
+        groupData, 
+        tableData, 
+        discountData // <-- FETCH DISCOUNTS
+      ] = await Promise.all([
+        window.api.getProducts(),
+        window.api.getCategories(),
+        window.api.getModifierGroups(),
+        window.api.getTables(),
+        window.api.getDiscounts(), // <-- NEW API CALL
+      ]);
+      
       setProducts(productData);
       
-      const categoryData = await window.api.getCategories();
       setRawCategories(categoryData);
       setCategories(categoryData.map(cat => ({ value: cat.id.toString(), label: cat.name })));
 
-      const groupData = await window.api.getModifierGroups();
       setRawModifierGroups(groupData);
       setModifierGroups(groupData.map(g => ({ value: g.id.toString(), label: g.name })));
       
-      const tableData = await window.api.getTables();
       setTables(tableData);
+      setDiscounts(discountData); // <-- SET DISCOUNT STATE
+
     } catch (error) { console.error("Error fetching page data:", error); }
   };
 
@@ -67,6 +82,7 @@ export default function InventoryPage() {
           <Tabs.Tab value="categories">Categories</Tabs.Tab>
           <Tabs.Tab value="modifiers">Modifiers</Tabs.Tab>
           <Tabs.Tab value="tables">Tables</Tabs.Tab>
+          <Tabs.Tab value="discounts">Discounts</Tabs.Tab> {/* <-- ADD NEW TAB */}
         </Tabs.List>
 
         <Tabs.Panel value="products" pt="xs">
@@ -80,6 +96,10 @@ export default function InventoryPage() {
         </Tabs.Panel>
         <Tabs.Panel value="tables" pt="xs">
           <TableManager tables={tables} onDataChanged={fetchData} />
+        </Tabs.Panel>
+        {/* --- ADD NEW TAB PANEL --- */}
+        <Tabs.Panel value="discounts" pt="xs">
+          <DiscountManager discounts={discounts} onDataChanged={fetchData} />
         </Tabs.Panel>
       </Tabs>
     </div>

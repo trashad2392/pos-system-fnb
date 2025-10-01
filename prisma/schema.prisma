@@ -11,6 +11,19 @@ datasource db {
   url      = "file:./prisma/dev.db"
 }
 
+// --- START: NEW DISCOUNT MODEL ---
+model Discount {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  type        String // "PERCENT" or "FIXED"
+  value       Float
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  orderItems  OrderItem[]
+  orders      Order[]
+}
+// --- END: NEW DISCOUNT MODEL ---
+
 model Category {
   id       Int       @id @default(autoincrement())
   name     String    @unique
@@ -19,14 +32,14 @@ model Category {
 }
 
 model Product {
-  id             Int      @id @default(autoincrement())
+  id             Int                    @id @default(autoincrement())
   name           String
-  sku            String   @unique
+  sku            String                 @unique
   price          Float
   description    String?
-  isArchived     Boolean  @default(false)
+  isArchived     Boolean                @default(false)
   categoryId     Int
-  category       Category @relation(fields: [categoryId], references: [id])
+  category       Category               @relation(fields: [categoryId], references: [id])
   modifierGroups ProductModifierGroup[]
   orderItems     OrderItem[]
 }
@@ -56,13 +69,13 @@ model ProductModifierGroup {
 }
 
 model ModifierOption {
-  id              Int                 @id @default(autoincrement())
-  name            String
-  priceAdjustment Float               @default(0)
-  selectionCost   Int                 @default(1)
-  modifierGroupId Int
-  modifierGroup   ModifierGroup       @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
-  orderItems      OrderItemModifier[]
+  id               Int                 @id @default(autoincrement())
+  name             String
+  priceAdjustment  Float               @default(0)
+  selectionCost    Int                 @default(1)
+  modifierGroupId  Int
+  modifierGroup    ModifierGroup       @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  orderItems       OrderItemModifier[]
 }
 
 model Table {
@@ -85,6 +98,21 @@ model Order {
   comment       String?
   userId        Int?
   user          User?       @relation(fields: [userId], references: [id])
+  payments      Payment[]
+  
+  // --- START: DISCOUNT RELATION ---
+  discountId    Int?
+  discount      Discount?   @relation(fields: [discountId], references: [id])
+  // --- END: DISCOUNT RELATION ---
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  amount    Float
+  method    String 
+  createdAt DateTime @default(now())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model OrderItem {
@@ -97,6 +125,11 @@ model OrderItem {
   product            Product             @relation(fields: [productId], references: [id])
   selectedModifiers  OrderItemModifier[]
   comment            String?
+
+  // --- START: DISCOUNT RELATION ---
+  discountId         Int?
+  discount           Discount?           @relation(fields: [discountId], references: [id])
+  // --- END: DISCOUNT RELATION ---
 }
 
 model OrderItemModifier {
@@ -114,7 +147,7 @@ model OrderItemModifier {
 model User {
   id         Int      @id @default(autoincrement())
   name       String
-  pin        String? // Storing PIN as a string. In a real app, this should be hashed.
+  pin        String?
   role       String   @default("Cashier") // e.g., "Cashier", "Manager", "Admin"
   hourlyRate Float?
   isActive   Boolean  @default(true)

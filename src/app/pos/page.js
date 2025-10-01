@@ -10,13 +10,15 @@ import ModifierModal from './components/ModifierModal';
 import PaymentModal from './components/PaymentModal';
 import HeldOrdersModal from './components/HeldOrdersModal';
 import CommentModal from './components/CommentModal';
+import DiscountModal from './components/DiscountModal'; // <-- ADD THIS IMPORT
 
 export default function PosPage() {
   const {
-    posView, activeOrder, tables, menu, heldOrders,
+    posView, activeOrder, tables, menu, heldOrders, discounts, // <-- GET DISCOUNTS
     customizingProduct, modifierModalOpened, paymentModalOpened,
     selectedItemId, heldOrdersModalOpened, isLoading,
     commentModalOpened, commentTarget, keyboardVisible,
+    discountTarget, discountModalOpened, // <-- GET DISCOUNT STATE
     actions
   } = usePosLogic();
 
@@ -40,6 +42,8 @@ export default function PosPage() {
           selectedItemId={selectedItemId}
           onSelectItem={actions.handleSelectItem}
           onOpenCommentModal={actions.handleOpenCommentModal}
+          onFastCash={actions.handleFastCash}
+          onOpenDiscountModal={actions.handleOpenDiscountModal} // <-- PASS ACTION
         />;
       case 'table-select':
         return <TableSelectView
@@ -91,6 +95,16 @@ export default function PosPage() {
         keyboardVisible={keyboardVisible}
         onToggleKeyboard={actions.toggleKeyboard}
       />
+
+      {/* --- ADD THE NEW DISCOUNT MODAL --- */}
+      <DiscountModal
+        opened={discountModalOpened}
+        onClose={actions.closeDiscountModal}
+        onSelectDiscount={actions.handleSelectDiscount}
+        target={discountTarget}
+        discounts={discounts}
+      />
+
     </div>
   );
 }

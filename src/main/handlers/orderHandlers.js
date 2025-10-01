@@ -3,36 +3,14 @@ const { ipcMain } = require('electron');
 const { prisma } = require('../../lib/db');
 const { differenceInMilliseconds, subMilliseconds, formatISO } = require('date-fns');
 
+// --- START: REWRITTEN getUpdatedOrder FUNCTION ---
 async function getUpdatedOrder(tx, orderId) {
+  // 1. Get the order with all its relations, including discounts
   const order = await tx.order.findUnique({
     where: { id: orderId },
     include: {
-      items: {
-        include: {
-          product: true,
-          selectedModifiers: {
-            orderBy: { displayOrder: 'asc' },
-            include: { modifierOption: true },
-          },
-        },
-      },
-    },
-  });
-
-  const totalAmount = order.items.reduce((sum, item) => {
-    const itemBasePrice = item.priceAtTimeOfOrder;
-    const modifiersTotal = item.selectedModifiers.reduce((modSum, mod) => {
-      return modSum + (mod.modifierOption.priceAdjustment * mod.quantity);
-    }, 0);
-    return sum + (item.quantity * (itemBasePrice + modifiersTotal));
-  }, 0);
-
-  await tx.order.update({ where: { id: orderId }, data: { totalAmount: totalAmount } });
-
-  return tx.order.findUnique({
-    where: { id: orderId },
-    include: {
       table: true,
+      discount: true, // Include order-level discount
       items: {
         orderBy: { id: 'asc' },
         include: {
@@ -41,11 +19,77 @@ async function getUpdatedOrder(tx, orderId) {
             orderBy: { displayOrder: 'asc' },
             include: { modifierOption: true },
           },
+          discount: true, // Include item-level discount
         },
       },
     },
   });
+
+  if (!order) {
+    // If the order was deleted (e.g., cleared), we might not find it.
+    // Return null or a specific structure if needed.
+    return null;
+  }
+
+  // 2. Calculate the new total amount considering all discounts
+  let subtotal = 0;
+  for (const item of order.items) {
+    let itemBasePrice = item.priceAtTimeOfOrder;
+    const modifiersTotal = item.selectedModifiers.reduce((modSum, mod) => {
+      return modSum + (mod.modifierOption.priceAdjustment * mod.quantity);
+    }, 0);
+    
+    let itemTotalBeforeDiscount = (itemBasePrice + modifiersTotal) * item.quantity;
+
+    // Apply item-level discount
+    if (item.discount) {
+      if (item.discount.type === 'PERCENT') {
+        itemTotalBeforeDiscount *= (1 - item.discount.value / 100);
+      } else { // FIXED
+        // Apply fixed discount per unit in the quantity
+        itemTotalBeforeDiscount -= (item.discount.value * item.quantity);
+      }
+    }
+    subtotal += Math.max(0, itemTotalBeforeDiscount); // Ensure price doesn't go below zero
+  }
+
+  let finalTotal = subtotal;
+  // Apply order-level discount
+  if (order.discount) {
+    if (order.discount.type === 'PERCENT') {
+      finalTotal *= (1 - order.discount.value / 100);
+    } else { // FIXED
+      finalTotal -= order.discount.value;
+    }
+  }
+
+  finalTotal = Math.max(0, finalTotal);
+
+  // 3. Update the order with the new total
+  const updatedOrder = await tx.order.update({
+    where: { id: orderId },
+    data: { totalAmount: finalTotal },
+    include: {
+      table: true,
+      discount: true,
+      items: {
+        orderBy: { id: 'asc' },
+        include: {
+          product: true,
+          selectedModifiers: {
+            orderBy: { displayOrder: 'asc' },
+            include: { modifierOption: true },
+          },
+          discount: true,
+        },
+      },
+    },
+  });
+
+  return updatedOrder;
 }
+// --- END: REWRITTEN getUpdatedOrder FUNCTION ---
+
 
 async function getStatsForPeriod(startDate, endDate) {
   const paidOrders = await prisma.order.findMany({
@@ -205,7 +249,7 @@ function setupOrderHandlers() {
       if (!product) throw new Error('Product not found.');
       const priceAtTimeOfOrder = product.price;
       const existingItems = await tx.orderItem.findMany({
-        where: { orderId, productId },
+        where: { orderId, productId, discountId: null }, // Only stack if no discount
         include: { selectedModifiers: { orderBy: { displayOrder: 'asc' } } },
       });
       const matchingItem = existingItems.find(item => {
@@ -262,15 +306,46 @@ function setupOrderHandlers() {
     });
   });
 
-  ipcMain.handle('finalize-order', async (e, { orderId, paymentMethod }) => {
+  ipcMain.handle('finalize-order', async (e, { orderId, payments }) => {
     return prisma.$transaction(async (tx) => {
-      const orderToFinalize = await tx.order.findUnique({ where: { id: orderId } });
+      const orderToFinalize = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
+      });
+
       if (!orderToFinalize) throw new Error('Order not found.');
       if (orderToFinalize.status !== 'OPEN') throw new Error('This order is not open and cannot be finalized.');
-      if (orderToFinalize.tableId) {
-        await tx.table.update({ where: { id: orderToFinalize.tableId }, data: { status: 'AVAILABLE' } });
+
+      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+      const updatedOrderForTotal = await getUpdatedOrder(tx, orderId);
+
+      if (Math.abs(totalPaid - updatedOrderForTotal.totalAmount) > 0.001) {
+        throw new Error(`Total paid (${totalPaid.toFixed(2)}) does not match order total (${updatedOrderForTotal.totalAmount.toFixed(2)}).`);
       }
-      return tx.order.update({ where: { id: orderId }, data: { status: 'PAID', paymentMethod: paymentMethod } });
+
+      await tx.payment.createMany({
+        data: payments.map(p => ({
+          amount: p.amount,
+          method: p.method,
+          orderId: orderId,
+        })),
+      });
+
+      if (orderToFinalize.tableId) {
+        await tx.table.update({
+          where: { id: orderToFinalize.tableId },
+          data: { status: 'AVAILABLE' },
+        });
+      }
+
+      const paymentMethodsString = payments.map(p => p.method).join(', ');
+      return tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: 'PAID',
+          paymentMethod: paymentMethodsString,
+        },
+      });
     });
   });
   
@@ -319,7 +394,10 @@ function setupOrderHandlers() {
       if (orderToClear.tableId) {
         await tx.table.update({ where: { id: orderToClear.tableId }, data: { status: 'AVAILABLE' } });
       }
-      return tx.order.update({ where: { id: orderId }, data: { status: 'CLEARED' } });
+      // Instead of updating status, we delete the order and its items
+      await tx.orderItem.deleteMany({ where: { orderId: orderId } });
+      await tx.order.delete({ where: { id: orderId } });
+      return { success: true };
     });
   });
 
@@ -342,6 +420,37 @@ function setupOrderHandlers() {
       return getUpdatedOrder(tx, orderId);
     });
   });
+
+  // --- START: NEW DISCOUNT HANDLERS ---
+  ipcMain.handle('apply-discount-to-item', async (e, { orderId, orderItemId, discountId }) => {
+    return prisma.$transaction(async (tx) => {
+      // Rule: Applying an item discount clears any whole-order discount.
+      await tx.order.update({ where: { id: orderId }, data: { discountId: null } });
+
+      await tx.orderItem.update({
+        where: { id: orderItemId },
+        data: { discountId: discountId }, // Pass null to remove a discount
+      });
+      return getUpdatedOrder(tx, orderId);
+    });
+  });
+
+  ipcMain.handle('apply-discount-to-order', async (e, { orderId, discountId }) => {
+    return prisma.$transaction(async (tx) => {
+      // Rule: Applying a whole-order discount clears all item-level discounts.
+      await tx.orderItem.updateMany({
+        where: { orderId: orderId },
+        data: { discountId: null },
+      });
+      
+      await tx.order.update({
+        where: { id: orderId },
+        data: { discountId: discountId }, // Pass null to remove a discount
+      });
+      return getUpdatedOrder(tx, orderId);
+    });
+  });
+  // --- END: NEW DISCOUNT HANDLERS ---
 }
 
 module.exports = { setupOrderHandlers };

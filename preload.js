@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('api', {
   clearOrder: (data) => ipcRenderer.invoke('clear-order', data),
   updateItemComment: (data) => ipcRenderer.invoke('update-item-comment', data),
   updateOrderComment: (data) => ipcRenderer.invoke('update-order-comment', data),
+  // --- START: ADD DISCOUNT APPLICATION ---
+  applyDiscountToItem: (data) => ipcRenderer.invoke('apply-discount-to-item', data),
+  applyDiscountToOrder: (data) => ipcRenderer.invoke('apply-discount-to-order', data),
+  // --- END: ADD DISCOUNT APPLICATION ---
 
   // Category Functions
   getCategories: () => ipcRenderer.invoke('get-categories'),
@@ -53,7 +57,7 @@ contextBridge.exposeInMainWorld('api', {
   updateTable: (data) => ipcRenderer.invoke('update-table', data),
   deleteTable: (id) => ipcRenderer.invoke('delete-table', id),
 
-  // --- NEW: User & Shift Functions ---
+  // User & Shift Functions
   getUsers: () => ipcRenderer.invoke('get-users'),
   addUser: (data) => ipcRenderer.invoke('add-user', data),
   updateUser: (data) => ipcRenderer.invoke('update-user', data),
@@ -63,4 +67,10 @@ contextBridge.exposeInMainWorld('api', {
   getActiveUser: () => ipcRenderer.invoke('get-active-user'),
   clockOut: () => ipcRenderer.invoke('clock-out'),
   getCurrentShift: (userId) => ipcRenderer.invoke('get-current-shift', userId),
+
+  // Discount Functions
+  getDiscounts: () => ipcRenderer.invoke('get-discounts'),
+  addDiscount: (data) => ipcRenderer.invoke('add-discount', data),
+  updateDiscount: (data) => ipcRenderer.invoke('update-discount', data),
+  deactivateDiscount: (id) => ipcRenderer.invoke('deactivate-discount', id),
 });
