@@ -2,6 +2,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
+  // Image Upload
+  uploadImage: () => ipcRenderer.invoke('upload-image'), // <-- ADDED
+
   // Product Functions
   getProducts: () => ipcRenderer.invoke('get-products'),
   addProduct: (data) => ipcRenderer.invoke('add-product', data),
@@ -21,7 +24,6 @@ contextBridge.exposeInMainWorld('api', {
   removeItemFromOrder: (data) => ipcRenderer.invoke('remove-item-from-order', data),
   finalizeOrder: (data) => ipcRenderer.invoke('finalize-order', data),
   voidOrderItem: (data) => ipcRenderer.invoke('void-order-item', data),
-  // --- NEW: Added function for voiding a full order ---
   voidFullOrder: (data) => ipcRenderer.invoke('void-full-order', data),
   holdOrder: (data) => ipcRenderer.invoke('hold-order', data),
   getHeldOrders: (data) => ipcRenderer.invoke('get-held-orders', data),

@@ -257,7 +257,15 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
   if (!product || !opened || !currentGroup) return null;
 
   return (
-    <Modal opened={opened} onClose={onClose} title={`Customize ${product.name}`} size="xl" withCloseButton={false} closeOnClickOutside={false} closeOnEscape={false}>
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title={`Customize ${product.name}`}
+      size="xl"
+      withCloseButton // <-- This is the main change
+      closeOnClickOutside // <-- This is a nice addition for UX
+      closeOnEscape // <-- This is also a nice addition
+    >
       <Grid>
         <Grid.Col span={4}>
           <SummaryPanel product={product} sortedModifierGroups={sortedModifierGroups} selections={selections} totalPrice={totalPrice} />

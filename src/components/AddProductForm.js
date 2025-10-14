@@ -2,8 +2,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, TextInput, NumberInput, Group, Text, Paper, Title, Select, Box, ActionIcon } from '@mantine/core';
-import { IconArrowDown, IconArrowUp, IconX } from '@tabler/icons-react';
+import { Button, TextInput, NumberInput, Group, Text, Paper, Title, Select, Box, ActionIcon, Image } from '@mantine/core';
+import { IconArrowDown, IconArrowUp, IconX, IconUpload } from '@tabler/icons-react';
 
 // Helper component for the re-orderable list
 function OrderedModifierList({ items, onMove, onRemove }) {
@@ -41,19 +41,31 @@ export default function AddProductForm({ onProductAdded, categories, modifierGro
   const [price, setPrice] = useState(0);
   const [categoryId, setCategoryId] = useState(null);
   const [orderedModifiers, setOrderedModifiers] = useState([]);
+  const [image, setImage] = useState(null); // New state for image
   const [message, setMessage] = useState('');
+
+  const handleImageUpload = async () => {
+    try {
+      const imagePath = await window.api.uploadImage();
+      if (imagePath) {
+        setImage(imagePath);
+      }
+    } catch (error) {
+      setMessage(`Error uploading image: ${error.message}`);
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!categoryId) { setMessage('Error: Please select a category.'); return; }
     setMessage('Adding product...');
-    
+
     const productData = {
       name,
       sku,
       price: parseFloat(price) || 0,
       categoryId: parseInt(categoryId, 10),
-      // UPDATED: Send the ordered list of modifier IDs
+      image, // Add image to data
       modifierGroupIds: orderedModifiers.map(om => om.modifierGroupId),
     };
 
@@ -61,15 +73,16 @@ export default function AddProductForm({ onProductAdded, categories, modifierGro
       const result = await window.api.addProduct(productData);
       setMessage(`Success! Added: ${result.name}`);
       // Reset all state
-      setName(''); 
-      setSku(''); 
-      setPrice(0); 
-      setCategoryId(null); 
+      setName('');
+      setSku('');
+      setPrice(0);
+      setCategoryId(null);
       setOrderedModifiers([]);
+      setImage(null); // Reset image
       if (onProductAdded) { onProductAdded(); }
     } catch (error) {
       setMessage(`Error: ${error.message}`);
-      console.error("Add Product Error:", error); 
+      console.error("Add Product Error:", error);
     }
   };
 
@@ -78,7 +91,7 @@ export default function AddProductForm({ onProductAdded, categories, modifierGro
     if (!modifierGroupIdStr) return;
     const modifierGroupId = parseInt(modifierGroupIdStr, 10);
     if (orderedModifiers.some(om => om.modifierGroupId === modifierGroupId)) return;
-    
+
     const groupToAdd = modifierGroups.find(mg => parseInt(mg.value, 10) === modifierGroupId);
     if (groupToAdd) {
       setOrderedModifiers(current => [...current, { modifierGroupId, label: groupToAdd.label }]);
@@ -93,13 +106,12 @@ export default function AddProductForm({ onProductAdded, categories, modifierGro
     const newOrderedModifiers = [...orderedModifiers];
     const item = newOrderedModifiers[index];
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
-    
+
     newOrderedModifiers[index] = newOrderedModifiers[swapIndex];
     newOrderedModifiers[swapIndex] = item;
-    
+
     setOrderedModifiers(newOrderedModifiers);
   };
-
 
   return (
     <Paper shadow="xs" p="md" withBorder mt="xl">
@@ -120,27 +132,32 @@ export default function AddProductForm({ onProductAdded, categories, modifierGro
             required
           />
         </Group>
-        
-        {/* --- UPDATED MODIFIER SECTION --- */}
+
+        <Box mt="md">
+            <Text fw={500}>Product Image</Text>
+            {image && <Image src={image} alt="Product image preview" w={100} h={100} radius="sm" mt="xs" />}
+            <Button leftSection={<IconUpload size={14} />} onClick={handleImageUpload} mt="xs" variant="outline">
+                Upload Image
+            </Button>
+        </Box>
+
         <Box mt="md">
             <Text fw={500}>Modifier Groups</Text>
             <Select
               label="Add a modifier group"
               placeholder="Search and select a group to add..."
-              // Filter out groups that have already been added
               data={modifierGroups.filter(mg => !orderedModifiers.some(om => om.modifierGroupId === parseInt(mg.value, 10)))}
               onChange={handleAddModifier}
               searchable
               clearable
             />
-            <OrderedModifierList 
+            <OrderedModifierList
               items={orderedModifiers}
               onMove={handleMoveModifier}
               onRemove={handleRemoveModifier}
             />
         </Box>
-        {/* --- END UPDATED SECTION --- */}
-        
+
         <Button type="submit" mt="md">Add Product</Button>
       </form>
       {message && <Text mt="sm" c={message.startsWith('Error') ? 'red' : 'green'}>{message}</Text>}

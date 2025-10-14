@@ -34,6 +34,7 @@ model Product {
   name           String
   sku            String                 @unique
   price          Float
+  image          String? 
   description    String?
   isArchived     Boolean                @default(false)
   categoryId     Int

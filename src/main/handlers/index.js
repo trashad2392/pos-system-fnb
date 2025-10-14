@@ -6,7 +6,8 @@ const { setupTableHandlers } = require('./tableHandlers');
 const { setupOrderHandlers } = require('./orderHandlers');
 const { setupImportHandlers } = require('./importHandlers');
 const { setupUserHandlers } = require('./userHandlers');
-const { setupDiscountHandlers } = require('./discountHandlers'); // <-- ADD THIS LINE
+const { setupDiscountHandlers } = require('./discountHandlers');
+const { setupFileHandlers } = require('./fileHandlers'); // <-- ADDED
 
 function setupAllIpcHandlers() {
   setupCategoryHandlers();
@@ -16,7 +17,8 @@ function setupAllIpcHandlers() {
   setupOrderHandlers();
   setupImportHandlers();
   setupUserHandlers();
-  setupDiscountHandlers(); // <-- AND ADD THIS LINE
+  setupDiscountHandlers();
+  setupFileHandlers(); // <-- ADDED
 }
 
 module.exports = { setupAllIpcHandlers };

@@ -1,5 +1,5 @@
 // main.js
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const serve = require('electron-serve');
@@ -34,6 +34,19 @@ function setupDatabase() {
   
 // App lifecycle
 app.whenReady().then(() => {
+  // We need to register a custom protocol to securely serve local files.
+  protocol.registerFileProtocol('safe-file', (request, callback) => {
+    const url = request.url.replace(/^safe-file:\/\//, '');
+    try {
+      // Decode URI components to handle spaces and other characters
+      return callback(decodeURIComponent(url));
+    } catch (error) {
+      console.error('Failed to decode URL', url, error);
+      // Return an error if decoding fails
+      return callback({ error: -6 }); // FILE_NOT_FOUND
+    }
+  });
+  
   setupDatabase();
   // This one function now sets up all our backend API handlers
   setupAllIpcHandlers();

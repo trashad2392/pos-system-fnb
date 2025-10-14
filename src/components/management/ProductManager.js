@@ -1,8 +1,8 @@
 // src/components/management/ProductManager.js
 "use client";
 import { useState } from 'react';
-import { Title, Box, TextInput, Table, Button, Paper, Group, ActionIcon, Modal, NumberInput, Text, Select } from '@mantine/core';
-import { IconSearch, IconEdit, IconArchive, IconArrowDown, IconArrowUp, IconX } from '@tabler/icons-react';
+import { Title, Box, TextInput, Table, Button, Paper, Group, ActionIcon, Modal, NumberInput, Text, Select, Image } from '@mantine/core';
+import { IconSearch, IconEdit, IconArchive, IconArrowDown, IconArrowUp, IconX, IconUpload } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import AddProductForm from '@/components/AddProductForm';
 
@@ -35,7 +35,6 @@ function OrderedModifierList({ items, onMove, onRemove }) {
   );
 }
 
-
 export default function ProductManager({ products, categories, modifierGroups, onDataChanged }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [opened, { open, close }] = useDisclosure(false);
@@ -48,7 +47,7 @@ export default function ProductManager({ products, categories, modifierGroups, o
       modifierGroup: pmg.modifierGroup,
     }));
     setOrderedModifiers(initialOrderedModifiers);
-    
+
     setSelectedProduct({
       ...product,
       categoryId: product.categoryId.toString(),
@@ -56,15 +55,27 @@ export default function ProductManager({ products, categories, modifierGroups, o
     open();
   };
 
+  const handleImageUpload = async () => {
+    try {
+      const imagePath = await window.api.uploadImage();
+      if (imagePath && selectedProduct) {
+        setSelectedProduct({ ...selectedProduct, image: imagePath });
+      }
+    } catch (error) {
+      console.error("Failed to upload image:", error);
+    }
+  };
+
   const handleUpdateProduct = async (event) => {
     event.preventDefault();
     if (!selectedProduct) return;
     try {
-      const { id, name, sku, price, categoryId } = selectedProduct;
+      const { id, name, sku, price, categoryId, image } = selectedProduct;
       const dataToUpdate = {
         name, sku, price,
         categoryId: parseInt(categoryId, 10),
         modifierGroups: orderedModifiers.map(om => ({ modifierGroupId: om.modifierGroupId })),
+        image,
       };
       await window.api.updateProduct({ id, data: dataToUpdate });
       onDataChanged();
@@ -82,7 +93,7 @@ export default function ProductManager({ products, categories, modifierGroups, o
     if (!modifierGroupIdStr) return;
     const modifierGroupId = parseInt(modifierGroupIdStr, 10);
     if (orderedModifiers.some(om => om.modifierGroupId === modifierGroupId)) return;
-    
+
     const groupToAdd = modifierGroups.find(mg => parseInt(mg.value, 10) === modifierGroupId);
     if (groupToAdd) {
       setOrderedModifiers(current => [...current, { modifierGroupId, modifierGroup: { name: groupToAdd.label } }]);
@@ -97,19 +108,19 @@ export default function ProductManager({ products, categories, modifierGroups, o
     const newOrderedModifiers = [...orderedModifiers];
     const item = newOrderedModifiers[index];
     const swapIndex = direction === 'up' ? index - 1 : index + 1;
-    
+
     newOrderedModifiers[index] = newOrderedModifiers[swapIndex];
     newOrderedModifiers[swapIndex] = item;
-    
+
     setOrderedModifiers(newOrderedModifiers);
   };
 
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase()));
-  
+
   return (
     <>
       <AddProductForm onProductAdded={onDataChanged} categories={categories} modifierGroups={modifierGroups} />
-      
+
       <Paper shadow="xs" p="md" withBorder mt="xl">
         <Title order={2} mb="md">Product List</Title>
         <Box mb="md"><TextInput placeholder="Search by name or SKU..." leftSection={<IconSearch size={14} />} value={searchQuery} onChange={(e) => setSearchQuery(e.currentTarget.value)}/></Box>
@@ -126,7 +137,15 @@ export default function ProductManager({ products, categories, modifierGroups, o
             <TextInput mt="md" label="SKU" required value={selectedProduct.sku} onChange={(e) => setSelectedProduct({ ...selectedProduct, sku: e.currentTarget.value })}/>
             <NumberInput mt="md" label="Price" required precision={2} min={0} value={Number(selectedProduct.price)} onChange={(v) => setSelectedProduct({ ...selectedProduct, price: v || 0 })}/>
             <Select mt="md" label="Category" required data={categories} value={selectedProduct.categoryId} onChange={(v) => setSelectedProduct({ ...selectedProduct, categoryId: v })} />
-            
+
+            <Box mt="md">
+                <Text fw={500}>Product Image</Text>
+                {selectedProduct.image && <Image src={selectedProduct.image} alt="Product image" w={100} h={100} radius="sm" mt="xs" />}
+                <Button leftSection={<IconUpload size={14} />} onClick={handleImageUpload} mt="xs" variant="outline">
+                    Change Image
+                </Button>
+            </Box>
+
             <Box mt="md">
               <Text fw={500}>Modifier Groups</Text>
               <Select
@@ -137,7 +156,7 @@ export default function ProductManager({ products, categories, modifierGroups, o
                 searchable
                 clearable
               />
-              <OrderedModifierList 
+              <OrderedModifierList
                 items={orderedModifiers}
                 onMove={handleMoveModifier}
                 onRemove={handleRemoveModifier}

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Title, Grid, Button, Paper, Text, Group, Tabs, ScrollArea, Divider, Center, Box, ActionIcon, Badge } from '@mantine/core';
+import { Title, Grid, Button, Paper, Text, Group, Tabs, ScrollArea, Divider, Center, Box, ActionIcon, Badge, Image, Stack } from '@mantine/core';
 import { IconArrowLeft, IconDeviceFloppy, IconEraser, IconX, IconPencil, IconCash, IconTag } from '@tabler/icons-react';
 import Keypad from './Keypad';
 
@@ -20,7 +20,7 @@ export default function OrderView({
   onSelectItem,
   onOpenCommentModal,
   onFastCash,
-  onOpenDiscountModal, // <-- ADD THIS
+  onOpenDiscountModal,
 }) {
   const { categories, products } = menu;
   const defaultCategory = categories.length > 0 ? categories[0].id.toString() : null;
@@ -70,8 +70,7 @@ export default function OrderView({
     }, 0);
     return (basePrice + modifiersPrice) * item.quantity;
   };
-  
-  // --- START: NEW DISCOUNT LOGIC ---
+
   const handleDiscountClick = () => {
     if (selectedItemId) {
       const item = order.items.find(i => i.id === selectedItemId);
@@ -80,10 +79,9 @@ export default function OrderView({
       onOpenDiscountModal(order);
     }
   };
-  
+
   const subtotal = order.items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
   const discountAmount = subtotal - order.totalAmount;
-  // --- END: NEW DISCOUNT LOGIC ---
 
 
   return (
@@ -95,7 +93,6 @@ export default function OrderView({
         <Paper withBorder style={{ height: '85vh', display: 'flex', flexDirection: 'column' }}>
           <ScrollArea style={{ flex: 1 }}>
             <Box p="xs">
-              {/* ... other items mapping ... */}
               {!isCartEmpty ? (
                 order.items.map(item => {
                   const itemTotal = calculateItemTotal(item);
@@ -113,7 +110,6 @@ export default function OrderView({
                       <Paper withBorder p="xs" mb="xs" shadow={selectedItemId === item.id ? 'md' : 'xs'}
                         style={selectedItemId === item.id ? { border: `1px solid var(--mantine-color-blue-6)` } : {}}
                       >
-                        {/* ... item details ... */}
                         <Group justify="space-between">
                             <Text fw={500}>{item.product.name}</Text>
                             <ActionIcon color="red" variant="subtle" onClick={(e) => { e.stopPropagation(); onRemoveItem(item.id); }}>
@@ -132,15 +128,11 @@ export default function OrderView({
                             ))}
                             </Box>
                         )}
-
-                        {/* --- START: DISCOUNT DISPLAY --- */}
                         {item.discount && (
                             <Badge color="red" variant="outline" size="sm" mt={2} mb={5} ml="sm">
                                 {item.discount.name}
                             </Badge>
                         )}
-                        {/* --- END: DISCOUNT DISPLAY --- */}
-
                         <Group justify="space-between" mt="xs">
                           <Text size="lg" fw={700}>Qty: {item.quantity}</Text>
                           {item.discount ? (
@@ -177,15 +169,12 @@ export default function OrderView({
               </Button>
              </Group>
              
-             {/* --- START: DISCOUNT BUTTON --- */}
              <Button fullWidth variant="light" color="red" leftSection={<IconTag size={16} />} onClick={handleDiscountClick} disabled={isCartEmpty} mb="sm">
                 {selectedItemId ? 'Discount Item' : 'Discount Order'}
              </Button>
-             {/* --- END: DISCOUNT BUTTON --- */}
 
             <Divider my="sm" />
 
-            {/* --- START: UPDATED TOTALS SECTION --- */}
             {discountAmount > 0 && (
               <>
                 <Group justify="space-between">
@@ -202,7 +191,6 @@ export default function OrderView({
               <Title order={3}>Total:</Title>
               <Title order={3}>${Number(order.totalAmount || 0).toFixed(2)}</Title>
             </Group>
-            {/* --- END: UPDATED TOTALS SECTION --- */}
 
             <Grid mt="md">
               <Grid.Col span={6}>
@@ -230,7 +218,6 @@ export default function OrderView({
         </Paper>
       </Grid.Col>
       <Grid.Col span={7}>
-        {/* ... Right Column (Menu) remains the same ... */}
         <Group justify="space-between" mb="md">
             <Title order={2}>{order.table ? `Order for ${order.table.name}` : `${order.orderType} Order`}</Title>
             <Button onClick={onBack} variant="outline" leftSection={<IconArrowLeft size={16} />}>Back to Home</Button>
@@ -246,9 +233,24 @@ export default function OrderView({
                     <Grid>
                     {products.filter(p => p.categoryId === cat.id).map(product => (
                         <Grid.Col span={4} key={product.id}>
-                        <Button variant="outline" style={{ height: '100px', width: '100%', padding: '8px' }} onClick={() => onProductSelect(product)}>
-                            <Text wrap="wrap">{product.name}</Text>
-                        </Button>
+                          {/* --- START OF CHANGES --- */}
+                          <Button
+                            variant="outline"
+                            style={{ height: '160px', width: '100%', padding: '8px' }} // Increased height
+                            onClick={() => onProductSelect(product)}
+                          >
+                            {product.image ? (
+                              <Stack align="center" justify="center" gap={4} style={{ height: '100%' }}>
+                                <Image src={product.image} height={100} alt={product.name} fit="contain" /> 
+                                <Text size="sm" wrap="wrap" ta="center" lh={1.2}>{product.name}</Text>
+                              </Stack>
+                            ) : (
+                              <Center style={{height: '100%'}}>
+                                <Text wrap="wrap" ta="center">{product.name}</Text>
+                              </Center>
+                            )}
+                          </Button>
+                          {/* --- END OF CHANGES --- */}
                         </Grid.Col>
                     ))}
                     </Grid>
