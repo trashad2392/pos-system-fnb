@@ -6,7 +6,7 @@ import { DatePickerInput } from '@mantine/dates';
 import '@mantine/dates/styles.css';
 import SalesTable from '@/components/SalesTable';
 
-export default function SalesReport({ sales, dateRange, onDateChange }) {
+export default function SalesReport({ sales, dateRange, onDateChange, onOpenVoidModal }) {
   return (
     <Paper withBorder p="md">
       <Group justify="space-between" mb="md">
@@ -20,7 +20,7 @@ export default function SalesReport({ sales, dateRange, onDateChange }) {
           maw={400}
         />
       </Group>
-      <SalesTable sales={sales} />
+      <SalesTable sales={sales} onOpenVoidModal={onOpenVoidModal} />
     </Paper>
   );
 }

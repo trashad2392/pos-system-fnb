@@ -3,14 +3,35 @@ const { ipcMain } = require('electron');
 const { prisma } = require('../../lib/db');
 const { differenceInMilliseconds, subMilliseconds, formatISO } = require('date-fns');
 
-// --- START: REWRITTEN getUpdatedOrder FUNCTION ---
+// --- Helper function to calculate the value of a single order item ---
+function calculateOrderItemValue(item) {
+  let itemBasePrice = item.priceAtTimeOfOrder;
+  const modifiersTotal = (item.selectedModifiers || []).reduce((modSum, mod) => {
+    // Ensure modifierOption is not null
+    const priceAdjustment = mod.modifierOption ? mod.modifierOption.priceAdjustment : 0;
+    return modSum + (priceAdjustment * mod.quantity);
+  }, 0);
+
+  let itemTotalBeforeDiscount = (itemBasePrice + modifiersTotal) * item.quantity;
+
+  // Apply item-level discount
+  if (item.discount) {
+    if (item.discount.type === 'PERCENT') {
+      itemTotalBeforeDiscount *= (1 - item.discount.value / 100);
+    } else { // FIXED
+      itemTotalBeforeDiscount -= (item.discount.value * item.quantity);
+    }
+  }
+  return Math.max(0, itemTotalBeforeDiscount);
+}
+
+
 async function getUpdatedOrder(tx, orderId) {
-  // 1. Get the order with all its relations, including discounts
   const order = await tx.order.findUnique({
     where: { id: orderId },
     include: {
       table: true,
-      discount: true, // Include order-level discount
+      discount: true,
       items: {
         orderBy: { id: 'asc' },
         include: {
@@ -19,42 +40,24 @@ async function getUpdatedOrder(tx, orderId) {
             orderBy: { displayOrder: 'asc' },
             include: { modifierOption: true },
           },
-          discount: true, // Include item-level discount
+          discount: true,
         },
       },
     },
   });
 
   if (!order) {
-    // If the order was deleted (e.g., cleared), we might not find it.
-    // Return null or a specific structure if needed.
     return null;
   }
 
-  // 2. Calculate the new total amount considering all discounts
   let subtotal = 0;
   for (const item of order.items) {
-    let itemBasePrice = item.priceAtTimeOfOrder;
-    const modifiersTotal = item.selectedModifiers.reduce((modSum, mod) => {
-      return modSum + (mod.modifierOption.priceAdjustment * mod.quantity);
-    }, 0);
-    
-    let itemTotalBeforeDiscount = (itemBasePrice + modifiersTotal) * item.quantity;
-
-    // Apply item-level discount
-    if (item.discount) {
-      if (item.discount.type === 'PERCENT') {
-        itemTotalBeforeDiscount *= (1 - item.discount.value / 100);
-      } else { // FIXED
-        // Apply fixed discount per unit in the quantity
-        itemTotalBeforeDiscount -= (item.discount.value * item.quantity);
-      }
+    if (item.status === 'ACTIVE') {
+      subtotal += calculateOrderItemValue(item);
     }
-    subtotal += Math.max(0, itemTotalBeforeDiscount); // Ensure price doesn't go below zero
   }
 
   let finalTotal = subtotal;
-  // Apply order-level discount
   if (order.discount) {
     if (order.discount.type === 'PERCENT') {
       finalTotal *= (1 - order.discount.value / 100);
@@ -65,7 +68,6 @@ async function getUpdatedOrder(tx, orderId) {
 
   finalTotal = Math.max(0, finalTotal);
 
-  // 3. Update the order with the new total
   const updatedOrder = await tx.order.update({
     where: { id: orderId },
     data: { totalAmount: finalTotal },
@@ -88,49 +90,164 @@ async function getUpdatedOrder(tx, orderId) {
 
   return updatedOrder;
 }
-// --- END: REWRITTEN getUpdatedOrder FUNCTION ---
 
 
 async function getStatsForPeriod(startDate, endDate) {
-  const paidOrders = await prisma.order.findMany({
-    where: {
-      status: 'PAID',
-      createdAt: { gte: startDate, lte: endDate },
-    },
-    include: {
-      items: {
-        include: { product: true }
-      }
-    }
-  });
+    const paidOrders = await prisma.order.findMany({
+        where: {
+            status: 'PAID', // Only 'PAID' orders contribute to stats
+            createdAt: { gte: startDate, lte: endDate },
+        },
+        include: {
+            items: {
+                include: {
+                    product: true,
+                    selectedModifiers: { include: { modifierOption: true } },
+                    discount: true
+                }
+            }
+        }
+    });
 
-  const totalRevenue = paidOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-  const totalSales = paidOrders.length;
-  const averageSaleValue = totalSales > 0 ? totalRevenue / totalSales : 0;
+    const totalRevenue = paidOrders.reduce((sum, order) => {
+        const orderRevenue = order.items.reduce((itemSum, item) => {
+            if (item.status !== 'VOIDED') {
+                return itemSum + calculateOrderItemValue(item);
+            }
+            return itemSum;
+        }, 0);
+        return sum + orderRevenue;
+    }, 0);
 
-  const productCounts = paidOrders
-    .flatMap(order => order.items)
-    .reduce((acc, item) => {
-      acc[item.product.name] = (acc[item.product.name] || 0) + item.quantity;
-      return acc;
-    }, {});
+    const totalSales = paidOrders.length;
+    const averageSaleValue = totalSales > 0 ? totalRevenue / totalSales : 0;
 
-  const bestSellingItem = Object.entries(productCounts).sort(([, a], [, b]) => b - a)[0] || ['N/A', 0];
+    const productCounts = paidOrders
+        .flatMap(order => order.items)
+        .filter(item => item.status !== 'VOIDED')
+        .reduce((acc, item) => {
+            acc[item.product.name] = (acc[item.product.name] || 0) + item.quantity;
+            return acc;
+        }, {});
 
-  return {
-    totalRevenue,
-    totalSales,
-    averageSaleValue,
-    bestSellingItem: {
-      name: bestSellingItem[0],
-      quantity: bestSellingItem[1],
-    },
-  };
+    const bestSellingItem = Object.entries(productCounts).sort(([, a], [, b]) => b - a)[0] || ['N/A', 0];
+
+    return {
+        totalRevenue,
+        totalSales,
+        averageSaleValue,
+        bestSellingItem: {
+            name: bestSellingItem[0],
+            quantity: bestSellingItem[1],
+        },
+    };
 }
 
 function setupOrderHandlers() {
+
+  ipcMain.handle('void-order-item', async (e, { orderItemId, voidType }) => {
+    return prisma.$transaction(async (tx) => {
+      const orderItemToVoid = await tx.orderItem.findUnique({
+        where: { id: orderItemId },
+        include: {
+          order: true,
+          selectedModifiers: { include: { modifierOption: true } },
+          discount: true,
+        },
+      });
+
+      if (!orderItemToVoid) throw new Error('Order item not found.');
+      if (orderItemToVoid.status === 'VOIDED') throw new Error('This item has already been voided.');
+      if (orderItemToVoid.order.status !== 'PAID') throw new Error('Only items from a paid order can be voided.');
+
+      const itemValue = calculateOrderItemValue(orderItemToVoid);
+
+      await tx.orderItem.update({
+        where: { id: orderItemId },
+        data: {
+          status: 'VOIDED',
+          voidedAt: new Date(),
+          voidType: voidType,
+        },
+      });
+
+      const updatedOrder = await tx.order.update({
+        where: { id: orderItemToVoid.orderId },
+        data: {
+          totalAmount: { decrement: itemValue },
+          refundAmount: { increment: itemValue },
+        },
+      });
+
+      const remainingItems = await tx.orderItem.count({
+          where: { orderId: updatedOrder.id, status: 'ACTIVE' }
+      });
+
+      if (remainingItems === 0) {
+          await tx.order.update({
+              where: { id: updatedOrder.id },
+              data: { status: 'VOIDED' }
+          });
+      }
+
+      return getUpdatedOrder(tx, updatedOrder.id);
+    });
+  });
+
+  ipcMain.handle('void-full-order', async (e, { orderId, voidType }) => {
+    return prisma.$transaction(async (tx) => {
+      const orderToVoid = await tx.order.findUnique({
+        where: { id: orderId },
+        include: {
+          items: {
+            where: { status: 'ACTIVE' },
+            include: {
+              selectedModifiers: { include: { modifierOption: true } },
+              discount: true
+            }
+          }
+        }
+      });
+
+      if (!orderToVoid || (orderToVoid.status !== 'PAID' && orderToVoid.status !== 'VOIDED')) {
+        throw new Error('Order is not in a voidable state.');
+      }
+
+      let totalValueToVoid = 0;
+      const now = new Date();
+
+      for (const item of orderToVoid.items) {
+        totalValueToVoid += calculateOrderItemValue(item);
+        await tx.orderItem.update({
+          where: { id: item.id },
+          data: {
+            status: 'VOIDED',
+            voidedAt: now,
+            voidType: voidType,
+          }
+        });
+      }
+
+      // --- START: THIS IS THE FIX ---
+      // We remove `voidedAt` and `voidType` from this update call,
+      // as they do not exist on the Order model.
+      const finalOrder = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: 'VOIDED',
+          totalAmount: { decrement: totalValueToVoid },
+          refundAmount: { increment: totalValueToVoid },
+        }
+      });
+      // --- END: THIS IS THE FIX ---
+
+      return getUpdatedOrder(tx, finalOrder.id);
+    });
+  });
+
+
   ipcMain.handle('get-sales', async () => prisma.order.findMany({
-    where: { status: { in: ['PAID', 'CLEARED'] } },
+    where: { status: { in: ['PAID', 'VOIDED'] } },
     orderBy: { createdAt: 'desc' },
     include: {
       items: {
@@ -148,22 +265,23 @@ function setupOrderHandlers() {
   ipcMain.handle('get-sales-by-date-range', async (e, { startDate, endDate }) => {
     return prisma.order.findMany({
       where: {
-        status: 'PAID',
         createdAt: {
           gte: new Date(startDate),
           lte: new Date(endDate),
         },
+        status: { in: ['PAID', 'VOIDED'] } // Show both in the report
       },
       orderBy: { createdAt: 'desc' },
       include: {
         items: {
-          include: {
-            product: true,
-            selectedModifiers: {
-              orderBy: { displayOrder: 'asc' },
-              include: { modifierOption: true }
+            orderBy: { id: 'asc' },
+            include: {
+                product: true,
+                selectedModifiers: {
+                    orderBy: { displayOrder: 'asc' },
+                    include: { modifierOption: true }
+                }
             }
-          }
         }
       }
     });
@@ -194,11 +312,25 @@ function setupOrderHandlers() {
           lte: new Date(endDate),
         },
       },
+       include: {
+        items: {
+          include: {
+            selectedModifiers: { include: { modifierOption: true } },
+            discount: true,
+          },
+        },
+      },
     });
 
     const salesByDay = paidOrders.reduce((acc, order) => {
       const day = formatISO(order.createdAt, { representation: 'date' });
-      acc[day] = (acc[day] || 0) + order.totalAmount;
+      const validTotal = order.items.reduce((sum, item) => {
+          if (item.status !== 'VOIDED') {
+              return sum + calculateOrderItemValue(item);
+          }
+          return sum;
+      }, 0);
+      acc[day] = (acc[day] || 0) + validTotal;
       return acc;
     }, {});
 
@@ -208,6 +340,7 @@ function setupOrderHandlers() {
     })).sort((a, b) => new Date(a.date) - new Date(b.date));
   });
 
+  // ... (the rest of the file from create-order downwards remains unchanged)
   ipcMain.handle('create-order', async (e, { tableId, orderType }) => {
     return prisma.$transaction(async (tx) => {
       const orderData = { status: 'OPEN', orderType: orderType, totalAmount: 0 };
@@ -249,7 +382,7 @@ function setupOrderHandlers() {
       if (!product) throw new Error('Product not found.');
       const priceAtTimeOfOrder = product.price;
       const existingItems = await tx.orderItem.findMany({
-        where: { orderId, productId, discountId: null }, // Only stack if no discount
+        where: { orderId, productId, discountId: null, status: 'ACTIVE' }, // Only stack active items
         include: { selectedModifiers: { orderBy: { displayOrder: 'asc' } } },
       });
       const matchingItem = existingItems.find(item => {
@@ -394,7 +527,6 @@ function setupOrderHandlers() {
       if (orderToClear.tableId) {
         await tx.table.update({ where: { id: orderToClear.tableId }, data: { status: 'AVAILABLE' } });
       }
-      // Instead of updating status, we delete the order and its items
       await tx.orderItem.deleteMany({ where: { orderId: orderId } });
       await tx.order.delete({ where: { id: orderId } });
       return { success: true };
@@ -421,15 +553,13 @@ function setupOrderHandlers() {
     });
   });
 
-  // --- START: NEW DISCOUNT HANDLERS ---
   ipcMain.handle('apply-discount-to-item', async (e, { orderId, orderItemId, discountId }) => {
     return prisma.$transaction(async (tx) => {
-      // Rule: Applying an item discount clears any whole-order discount.
       await tx.order.update({ where: { id: orderId }, data: { discountId: null } });
 
       await tx.orderItem.update({
         where: { id: orderItemId },
-        data: { discountId: discountId }, // Pass null to remove a discount
+        data: { discountId: discountId },
       });
       return getUpdatedOrder(tx, orderId);
     });
@@ -437,7 +567,6 @@ function setupOrderHandlers() {
 
   ipcMain.handle('apply-discount-to-order', async (e, { orderId, discountId }) => {
     return prisma.$transaction(async (tx) => {
-      // Rule: Applying a whole-order discount clears all item-level discounts.
       await tx.orderItem.updateMany({
         where: { orderId: orderId },
         data: { discountId: null },
@@ -445,12 +574,11 @@ function setupOrderHandlers() {
       
       await tx.order.update({
         where: { id: orderId },
-        data: { discountId: discountId }, // Pass null to remove a discount
+        data: { discountId: discountId },
       });
       return getUpdatedOrder(tx, orderId);
     });
   });
-  // --- END: NEW DISCOUNT HANDLERS ---
 }
 
 module.exports = { setupOrderHandlers };
