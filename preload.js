@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   // Image Upload
-  uploadImage: () => ipcRenderer.invoke('upload-image'), // <-- ADDED
+  uploadImage: () => ipcRenderer.invoke('upload-image'),
 
   // Product Functions
   getProducts: () => ipcRenderer.invoke('get-products'),
@@ -76,4 +76,11 @@ contextBridge.exposeInMainWorld('api', {
   addDiscount: (data) => ipcRenderer.invoke('add-discount', data),
   updateDiscount: (data) => ipcRenderer.invoke('update-discount', data),
   deactivateDiscount: (id) => ipcRenderer.invoke('deactivate-discount', id),
+
+  // --- NEW: Role & Permission Functions ---
+  getRoles: () => ipcRenderer.invoke('get-roles'),
+  getPermissions: () => ipcRenderer.invoke('get-permissions'),
+  createRole: (data) => ipcRenderer.invoke('create-role', data),
+  updateRole: (data) => ipcRenderer.invoke('update-role', data),
+  deleteRole: (id) => ipcRenderer.invoke('delete-role', id),
 });

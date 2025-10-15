@@ -2,15 +2,28 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Title, Tabs, Loader, Center } from '@mantine/core';
+import { Title, Tabs, Loader, Center, Text } from '@mantine/core';
 import { startOfDay, endOfDay, subDays } from 'date-fns';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
+import { useAuth } from '@/context/AuthContext'; // <-- Import useAuth
 import Dashboard from './components/Dashboard';
 import SalesReport from './components/SalesReport';
 import VoidItemModal from './components/VoidItemModal';
 
 export default function SalesPage() {
+  const { hasPermission } = useAuth(); // <-- Use our permission hook
+
+  // --- NEW: Permission Gate ---
+  if (!hasPermission('sales:view_reports')) {
+    return (
+      <Center style={{ height: '50vh' }}>
+        <Text c="red" fw={500}>You do not have permission to view this page.</Text>
+      </Center>
+    );
+  }
+  // --- END: Permission Gate ---
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [voidModalOpened, { open: openVoidModal, close: closeVoidModal }] = useDisclosure(false);
   const [orderToVoid, setOrderToVoid] = useState(null);
@@ -31,10 +44,8 @@ export default function SalesPage() {
     }
   };
 
-  // --- START: FIX FOR UI LAG ---
   const handleVoidItem = async (orderItemId, voidType) => {
     try {
-      // The API call returns the fully updated order object
       const updatedOrder = await window.api.voidOrderItem({ orderItemId, voidType });
       
       notifications.show({
@@ -43,13 +54,11 @@ export default function SalesPage() {
         color: 'green',
       });
 
-      // Directly update the state for the modal and the sales list
       setOrderToVoid(updatedOrder);
       setSales(currentSales => 
         currentSales.map(sale => sale.id === updatedOrder.id ? updatedOrder : sale)
       );
 
-      // Refresh dashboard data as it might have changed
       await fetchDashboardData();
 
     } catch (error) {
@@ -61,7 +70,6 @@ export default function SalesPage() {
       });
     }
   };
-  // --- END: FIX FOR UI LAG ---
 
   const handleVoidFullOrder = async (orderId, voidType) => {
     try {
@@ -71,7 +79,6 @@ export default function SalesPage() {
         message: 'The entire order has been voided.',
         color: 'green',
       });
-      // Refresh both lists after a full void
       await fetchSalesData();
       await fetchDashboardData();
       closeVoidModal(); 
@@ -167,13 +174,16 @@ export default function SalesPage() {
         </Tabs.Panel>
       </Tabs>
 
-      <VoidItemModal
-        opened={voidModalOpened}
-        onClose={closeVoidModal}
-        order={orderToVoid}
-        onVoidItem={handleVoidItem}
-        onVoidFullOrder={handleVoidFullOrder}
-      />
+      {/* Conditionally render the modal only if the user has permission */}
+      {hasPermission('orders:void') && (
+        <VoidItemModal
+          opened={voidModalOpened}
+          onClose={closeVoidModal}
+          order={orderToVoid}
+          onVoidItem={handleVoidItem}
+          onVoidFullOrder={handleVoidFullOrder}
+        />
+      )}
     </div>
   );
 }

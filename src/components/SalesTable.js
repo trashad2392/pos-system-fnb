@@ -3,6 +3,7 @@
 
 import { Table, Text, Box, Button, Badge, Group } from '@mantine/core';
 import { IconBan } from '@tabler/icons-react';
+import { useAuth } from '@/context/AuthContext'; // <-- Import useAuth
 
 const ClientDateTime = ({ date }) => {
   if (!date) return null;
@@ -10,6 +11,8 @@ const ClientDateTime = ({ date }) => {
 };
 
 export default function SalesTable({ sales, onOpenVoidModal }) {
+  const { hasPermission } = useAuth(); // <-- Use our permission hook
+  const canVoid = hasPermission('orders:void'); // <-- Check permission once
   const displayedSales = [...sales].reverse();
 
   return (
@@ -24,13 +27,13 @@ export default function SalesTable({ sales, onOpenVoidModal }) {
             <Table.Th>Items Sold</Table.Th>
             <Table.Th>Adjusted Total</Table.Th>
             <Table.Th>Status</Table.Th>
-            <Table.Th>Actions</Table.Th>
+            {/* Only render the Actions column if the user can void */}
+            {canVoid && <Table.Th>Actions</Table.Th>}
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
           {displayedSales.map((sale, index) => {
             const isFullyVoided = sale.status === 'VOIDED';
-            const hasActiveItems = sale.items.some(item => item.status === 'ACTIVE');
 
             return (
               <Table.Tr key={sale.id} style={isFullyVoided ? { backgroundColor: 'var(--mantine-color-red-0)' } : {}}>
@@ -66,32 +69,26 @@ export default function SalesTable({ sales, onOpenVoidModal }) {
                 </Table.Td>
                 <Table.Td fw={700}>${Number(sale.totalAmount).toFixed(2)}</Table.Td>
                 <Table.Td>
-                  {isFullyVoided ? (
-                    <Badge color="red" variant="filled">VOIDED</Badge>
-                  ) : !hasActiveItems ? (
-                    // This case should be rare now but good for safety
-                    <Badge color="red" variant="filled">VOIDED</Badge>
-                  ) : (sale.items.length > 0 && !hasActiveItems) ? (
-                    <Badge color="red" variant="filled">VOIDED</Badge>
-                  ) : (sale.items.some(i => i.status === 'VOIDED')) ? (
-                    <Badge color="orange" variant="light">Partially Voided</Badge>
-                  ) : (
-                    <Badge color="green" variant="light">Paid</Badge>
-                  )}
+                   <Badge color={isFullyVoided ? "red" : "green"} variant="light">
+                      {isFullyVoided ? "Voided" : "Paid"}
+                   </Badge>
                 </Table.Td>
-                 <Table.Td>
-                  {sale.status === 'PAID' && (
-                    <Button
-                      size="xs"
-                      color="red"
-                      variant="outline"
-                      onClick={() => onOpenVoidModal(sale.id)}
-                      leftSection={<IconBan size={14} />}
-                    >
-                      Void / Edit
-                    </Button>
-                  )}
-                </Table.Td>
+                {/* Conditionally render the cell with the button */}
+                {canVoid && (
+                  <Table.Td>
+                    {sale.status === 'PAID' && (
+                      <Button
+                        size="xs"
+                        color="red"
+                        variant="outline"
+                        onClick={() => onOpenVoidModal(sale.id)}
+                        leftSection={<IconBan size={14} />}
+                      >
+                        Void / Edit
+                      </Button>
+                    )}
+                  </Table.Td>
+                )}
               </Table.Tr>
             )
           })}

@@ -6,30 +6,46 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../components/auth/LoginScreen';
 import UserMenu from '../components/auth/UserMenu';
-import { Box, Group } from '@mantine/core';
+import { Box, Group, Center, Loader } from '@mantine/core';
 
 export default function AppContent({ children }) {
-  const { isAuthenticated, isManager } = useAuth();
+  const { isAuthenticated, hasPermission, loading } = useAuth();
   const pathname = usePathname();
+
+  if (loading) {
+    return (
+      <Center style={{ height: '100vh' }}>
+        <Loader size="xl" />
+      </Center>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginScreen />;
   }
   
-  // --- START OF CHANGES ---
   const navLinks = [
-    { href: "/pos/", label: "Point of Sale", requiredRole: "Cashier" },
-    { href: "/", label: "Inventory", requiredRole: "Manager" },
-    { href: "/sales/", label: "Sales", requiredRole: "Manager" },
-    { href: "/settings/", label: "Settings", requiredRole: "Manager" }, // New link
+    { href: "/pos", label: "Point of Sale", requiredPermission: "pos:access" },
+    // --- UPDATED: Show Inventory link if user has EITHER permission ---
+    { 
+      href: "/inventory", 
+      label: "Inventory", 
+      requiredPermission: () => hasPermission('inventory:manage') || hasPermission('discounts:manage')
+    },
+    { href: "/sales", label: "Sales", requiredPermission: "sales:view_reports" },
+    { 
+      href: "/settings", 
+      label: "Settings", 
+      requiredPermission: () => hasPermission('settings:manage_users') || hasPermission('settings:manage_roles')
+    },
   ];
-  // --- END OF CHANGES ---
 
+  // Updated filter logic to handle both strings and functions
   const accessibleLinks = navLinks.filter(link => {
-    if (link.requiredRole === "Manager") {
-      return isManager;
+    if (typeof link.requiredPermission === 'function') {
+      return link.requiredPermission();
     }
-    return true;
+    return hasPermission(link.requiredPermission);
   });
 
   return (
@@ -53,7 +69,7 @@ export default function AppContent({ children }) {
               style={{ 
                 textDecoration: 'none', 
                 color: 'var(--mantine-color-blue-6)',
-                fontWeight: pathname.startsWith(link.href) && (link.href !== '/' || pathname === '/') ? 'bold' : 'normal'
+                fontWeight: pathname.startsWith(link.href) ? 'bold' : 'normal'
               }}
             >
               {link.label}

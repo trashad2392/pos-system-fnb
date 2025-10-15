@@ -8,18 +8,35 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./prisma/dev.db"
+  url      = "file:./pos_v2.db"
+}
+
+// --- NEW: Permission Model ---
+// This model will store all possible actions in the system.
+model Permission {
+  id    Int    @id @default(autoincrement())
+  name  String @unique // e.g., "access_settings", "void_orders", "manage_inventory"
+  roles Role[] @relation("RoleToPermission")
+}
+
+// --- NEW: Role Model ---
+// This model defines a role and links it to multiple permissions.
+model Role {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique // e.g., "Cashier", "Shift Manager", "Admin"
+  users       User[]
+  permissions Permission[] @relation("RoleToPermission")
 }
 
 model Discount {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  type        String // "PERCENT" or "FIXED"
-  value       Float
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  orderItems  OrderItem[]
-  orders      Order[]
+  id         Int         @id @default(autoincrement())
+  name       String      @unique
+  type       String // "PERCENT" or "FIXED"
+  value      Float
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  orderItems OrderItem[]
+  orders     Order[]
 }
 
 model Category {
@@ -34,7 +51,7 @@ model Product {
   name           String
   sku            String                 @unique
   price          Float
-  image          String? 
+  image          String?
   description    String?
   isArchived     Boolean                @default(false)
   categoryId     Int
@@ -44,14 +61,14 @@ model Product {
 }
 
 model ModifierGroup {
-  id                             Int      @id @default(autoincrement())
+  id                             Int              @id @default(autoincrement())
   name                           String
-  minSelection                   Int      @default(0)
-  selectionBudget                Int      @default(1)
+  minSelection                   Int              @default(0)
+  selectionBudget                Int              @default(1)
   maxSelections                  Int?
-  maxSelectionsSyncedToOptionCount Boolean  @default(false)
-  allowRepeatedSelections        Boolean  @default(false)
-  exactBudgetRequired            Boolean  @default(false)
+  maxSelectionsSyncedToOptionCount Boolean          @default(false)
+  allowRepeatedSelections        Boolean          @default(false)
+  exactBudgetRequired            Boolean          @default(false)
   options                        ModifierOption[]
   products                       ProductModifierGroup[]
 }
@@ -124,7 +141,7 @@ model OrderItem {
   comment            String?
   status             String              @default("ACTIVE") // "ACTIVE" or "VOIDED"
   voidedAt           DateTime?
-  voidType           String?             // "SHORT" or "LONG"
+  voidType           String? // "SHORT" or "LONG"
   discountId         Int?
   discount           Discount?           @relation(fields: [discountId], references: [id])
 }
@@ -145,7 +162,9 @@ model User {
   id         Int      @id @default(autoincrement())
   name       String
   pin        String?
-  role       String   @default("Cashier") // e.g., "Cashier", "Manager", "Admin"
+  // --- UPDATED: 'role' is now a relation to the Role model ---
+  roleId     Int
+  role       Role     @relation(fields: [roleId], references: [id])
   hourlyRate Float?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
@@ -154,9 +173,9 @@ model User {
 }
 
 model Shift {
-  id       Int      @id @default(autoincrement())
-  clockIn  DateTime @default(now())
+  id       Int       @id @default(autoincrement())
+  clockIn  DateTime  @default(now())
   clockOut DateTime?
   userId   Int
-  user     User     @relation(fields: [userId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
 }

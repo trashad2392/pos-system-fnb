@@ -22,16 +22,26 @@ import { notifications } from '@mantine/notifications';
 const initialUserState = {
   name: '',
   pin: '',
-  role: 'Cashier',
+  roleId: null,
   hourlyRate: 0,
 };
 
-export default function UserManager({ users, onDataChanged }) {
+export default function UserManager({ users, roles, onDataChanged }) {
   const [opened, { open, close }] = useDisclosure(false);
   const [editingUser, setEditingUser] = useState(initialUserState);
 
+  const roleOptions = roles.map(role => ({
+    value: role.id.toString(),
+    label: role.name,
+  }));
+
   const handleOpenModal = (user = null) => {
-    setEditingUser(user ? { ...user } : initialUserState);
+    if (user) {
+      setEditingUser({ ...user, roleId: user.roleId.toString() });
+    } else {
+      const defaultRole = roles.find(r => r.name === 'Cashier');
+      setEditingUser({ ...initialUserState, roleId: defaultRole ? defaultRole.id.toString() : null });
+    }
     open();
   };
 
@@ -41,8 +51,8 @@ export default function UserManager({ users, onDataChanged }) {
   };
 
   const handleSaveUser = async () => {
-    if (!editingUser.name || !editingUser.pin) {
-      notifications.show({ title: 'Error', message: 'Name and PIN are required.', color: 'red' });
+    if (!editingUser.name || !editingUser.pin || !editingUser.roleId) {
+      notifications.show({ title: 'Error', message: 'Name, PIN, and Role are required.', color: 'red' });
       return;
     }
 
@@ -50,16 +60,14 @@ export default function UserManager({ users, onDataChanged }) {
       const dataToSave = {
         name: editingUser.name,
         pin: editingUser.pin,
-        role: editingUser.role,
+        roleId: parseInt(editingUser.roleId, 10),
         hourlyRate: parseFloat(editingUser.hourlyRate) || 0,
       };
 
       if (editingUser.id) {
-        // Update existing user
         await window.api.updateUser({ id: editingUser.id, data: dataToSave });
         notifications.show({ title: 'Success', message: 'User updated successfully.', color: 'green' });
       } else {
-        // Add new user
         await window.api.addUser(dataToSave);
         notifications.show({ title: 'Success', message: 'User added successfully.', color: 'green' });
       }
@@ -109,9 +117,9 @@ export default function UserManager({ users, onDataChanged }) {
           mt="md"
           label="Role"
           required
-          data={['Cashier', 'Manager', 'Admin']}
-          value={editingUser.role}
-          onChange={(value) => setEditingUser({ ...editingUser, role: value })}
+          data={roleOptions}
+          value={editingUser.roleId}
+          onChange={(value) => setEditingUser({ ...editingUser, roleId: value })}
         />
         <NumberInput
           mt="md"
@@ -150,7 +158,8 @@ export default function UserManager({ users, onDataChanged }) {
               users.map((user) => (
                 <Table.Tr key={user.id}>
                   <Table.Td>{user.name}</Table.Td>
-                  <Table.Td>{user.role}</Table.Td>
+                  {/* --- THIS IS THE FIX --- */}
+                  <Table.Td>{user.role?.name || 'N/A'}</Table.Td>
                   <Table.Td>${(user.hourlyRate || 0).toFixed(2)}</Table.Td>
                   <Table.Td>
                     <Group gap="xs">

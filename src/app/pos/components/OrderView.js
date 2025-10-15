@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Title, Grid, Button, Paper, Text, Group, Tabs, ScrollArea, Divider, Center, Box, ActionIcon, Badge, Image, Stack } from '@mantine/core';
+import { Title, Grid, Button, Paper, Text, Group, Tabs, ScrollArea, Divider, Center, Box, ActionIcon, Badge, Image, Stack, UnstyledButton, AspectRatio } from '@mantine/core';
 import { IconArrowLeft, IconDeviceFloppy, IconEraser, IconX, IconPencil, IconCash, IconTag } from '@tabler/icons-react';
 import Keypad from './Keypad';
 
@@ -232,25 +232,28 @@ export default function OrderView({
                 <ScrollArea style={{ height: '75vh' }}>
                     <Grid>
                     {products.filter(p => p.categoryId === cat.id).map(product => (
-                        <Grid.Col span={4} key={product.id}>
-                          {/* --- START OF CHANGES --- */}
-                          <Button
-                            variant="outline"
-                            style={{ height: '160px', width: '100%', padding: '8px' }} // Increased height
+                        <Grid.Col span={{ base: 6, sm: 4, md: 3 }} key={product.id}>
+                          <UnstyledButton
                             onClick={() => onProductSelect(product)}
+                            style={{ width: '100%' }}
                           >
-                            {product.image ? (
-                              <Stack align="center" justify="center" gap={4} style={{ height: '100%' }}>
-                                <Image src={product.image} height={100} alt={product.name} fit="contain" /> 
-                                <Text size="sm" wrap="wrap" ta="center" lh={1.2}>{product.name}</Text>
+                            <Paper withBorder shadow="sm" p="xs" radius="md">
+                              <Stack align="center" justify="center" gap={4}>
+                                <AspectRatio ratio={4 / 3} style={{ width: '100%' }}>
+                                  {product.image ? (
+                                    <Image src={product.image} alt={product.name} fit="contain" />
+                                  ) : (
+                                    <Center style={{ height: '100%', border: '1px dashed var(--mantine-color-gray-3)', borderRadius: '4px' }}>
+                                      <Text size="xs" c="dimmed">No Image</Text>
+                                    </Center>
+                                  )}
+                                </AspectRatio>
+                                <Text size="sm" wrap="wrap" ta="center" lh={1.2} mt={4} style={{ height: '40px' }}>
+                                  {product.name}
+                                </Text>
                               </Stack>
-                            ) : (
-                              <Center style={{height: '100%'}}>
-                                <Text wrap="wrap" ta="center">{product.name}</Text>
-                              </Center>
-                            )}
-                          </Button>
-                          {/* --- END OF CHANGES --- */}
+                            </Paper>
+                          </UnstyledButton>
                         </Grid.Col>
                     ))}
                     </Grid>

@@ -1,8 +1,8 @@
 // src/context/AuthContext.js
 "use client";
 
-import { createContext, useState, useContext, useEffect } from 'react';
-import { useRouter } from 'next/navigation'; // <-- NEW: Import useRouter
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { notifications } from '@mantine/notifications';
 import { Center, Loader } from '@mantine/core';
 
@@ -15,9 +15,8 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter(); // <-- NEW: Get router instance
+  const router = useRouter();
 
-  // On initial load, check if a user session is active on the backend
   useEffect(() => {
     const checkActiveUser = async () => {
       try {
@@ -44,14 +43,8 @@ export function AuthProvider({ children }) {
         color: 'green',
       });
       
-      // --- START OF FIX ---
-      // Redirect based on role after successful login
-      if (loggedInUser.role === 'Cashier') {
-        router.push('/pos');
-      } else {
-        router.push('/'); // Managers and Admins go to the main management page
-      }
-      // --- END OF FIX ---
+      // Redirect to the smart landing page
+      router.push('/');
 
       return loggedInUser;
     } catch (error) {
@@ -73,7 +66,7 @@ export function AuthProvider({ children }) {
         message: 'You have been successfully logged out.',
         color: 'blue',
       });
-      router.push('/'); // Redirect to the root, which will show the login screen
+      router.push('/');
     } catch (error) {
       notifications.show({
         title: 'Logout Failed',
@@ -85,7 +78,7 @@ export function AuthProvider({ children }) {
   
   const clockOut = async () => {
     try {
-      const clockedOutUser = user; // capture user before setting to null
+      const clockedOutUser = user;
       await window.api.clockOut();
       setUser(null);
       notifications.show({
@@ -93,7 +86,7 @@ export function AuthProvider({ children }) {
         message: 'You have been successfully clocked out.',
         color: 'blue',
       });
-      router.push('/'); // Redirect to the root, which will show the login screen
+      router.push('/');
     } catch (error) {
        notifications.show({
         title: 'Clock-Out Failed',
@@ -103,24 +96,26 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // --- NEW: hasPermission function ---
+  const hasPermission = useCallback((permission) => {
+    if (!user || !user.permissions) {
+      return false;
+    }
+    return user.permissions.includes(permission);
+  }, [user]);
+
+
   const value = {
     user,
+    loading,
     login,
     logout,
     clockOut,
     isAuthenticated: !!user,
-    // Add roles for easy access control
+    hasPermission, // Expose the new function
+    // isManager is now deprecated, but we can keep it for a bit for compatibility
     isManager: user?.role === 'Manager' || user?.role === 'Admin',
-    isAdmin: user?.role === 'Admin',
   };
-
-  if (loading) {
-    return (
-      <Center style={{ height: '100vh' }}>
-        <Loader size="xl" />
-      </Center>
-    );
-  }
 
   return (
     <AuthContext.Provider value={value}>

@@ -2,16 +2,14 @@
 const { ipcMain } = require('electron');
 const { prisma } = require('../../lib/db');
 
-// A simple in-memory store for the currently logged-in user.
-// In a real-world scenario with multiple windows, this might need a more robust solution.
 let activeUser = null;
 
 function setupUserHandlers() {
-  // --- User Management ---
   ipcMain.handle('get-users', () => 
     prisma.user.findMany({ 
       where: { isActive: true }, 
-      orderBy: { name: 'asc' } 
+      orderBy: { name: 'asc' },
+      include: { role: true }
     })
   );
 
@@ -23,24 +21,39 @@ function setupUserHandlers() {
     prisma.user.update({ where: { id }, data })
   );
 
-  // We'll "soft delete" by setting isActive to false
   ipcMain.handle('delete-user', (e, id) => 
     prisma.user.update({ where: { id }, data: { isActive: false } })
   );
 
-  // --- Authentication ---
   ipcMain.handle('login', async (e, pin) => {
-    const user = await prisma.user.findFirst({ where: { pin, isActive: true } });
+    const user = await prisma.user.findFirst({
+      where: { pin, isActive: true },
+      include: {
+        role: {
+          include: {
+            permissions: true,
+          },
+        },
+      },
+    });
+
     if (user) {
-      activeUser = user;
-      // Automatically clock in the user if they don't have an open shift
+      const simplifiedUser = {
+        id: user.id,
+        name: user.name,
+        role: user.role.name,
+        permissions: user.role.permissions.map(p => p.name),
+      };
+      
+      activeUser = simplifiedUser;
+
       const openShift = await prisma.shift.findFirst({
         where: { userId: user.id, clockOut: null },
       });
       if (!openShift) {
         await prisma.shift.create({ data: { userId: user.id } });
       }
-      return user;
+      return simplifiedUser;
     }
     throw new Error('Invalid PIN or inactive user.');
   });
@@ -54,9 +67,9 @@ function setupUserHandlers() {
     return activeUser;
   });
 
-  // --- Shift Management ---
   ipcMain.handle('clock-out', async () => {
     if (!activeUser) throw new Error('No user is logged in.');
+    
     const openShift = await prisma.shift.findFirst({
       where: { userId: activeUser.id, clockOut: null },
     });
@@ -66,7 +79,7 @@ function setupUserHandlers() {
         where: { id: openShift.id },
         data: { clockOut: new Date() },
       });
-      activeUser = null; // Log out after clocking out
+      activeUser = null;
       return true;
     }
     throw new Error('No open shift found for the current user.');

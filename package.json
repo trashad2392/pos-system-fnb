@@ -16,6 +16,9 @@
     "build:prisma": "node scripts/build-prisma.js",
     "build:electron": "npm run generate && npm run build:prisma && next build && electron-builder --win --mac --linux"
   },
+  "prisma": {
+    "seed": "node scripts/seed.js"
+  },
   "build": {
     "appId": "com.yourname.possystem",
     "productName": "POS System",
@@ -28,8 +31,8 @@
     ],
     "extraResources": [
       {
-        "from": "prisma/prisma/dev.db",
-        "to": "dev.db"
+        "from": "prisma/pos_v2.db",
+        "to": "pos_v2.db"
       }
     ],
     "directories": {
@@ -57,7 +60,8 @@
     "react": "^18",
     "react-dom": "^18",
     "react-simple-keyboard": "^3.7.77",
-    "recharts": "^2.12.7"
+    "recharts": "^2.12.7",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
