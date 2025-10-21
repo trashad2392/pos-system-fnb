@@ -11,6 +11,14 @@ datasource db {
   url      = "file:./pos_v2.db"
 }
 
+// --- NEW: Menu Model ---
+model Menu {
+  id         Int        @id @default(autoincrement())
+  name       String     @unique // e.g., "Dinner Menu", "Breakfast Menu"
+  isActive   Boolean    @default(true) // To easily enable/disable menus
+  categories Category[] // Link to categories belonging to this menu
+}
+
 // --- NEW: Permission Model ---
 // This model will store all possible actions in the system.
 model Permission {
@@ -39,11 +47,16 @@ model Discount {
   orders     Order[]
 }
 
+// --- MODIFIED: Category Model ---
 model Category {
   id       Int       @id @default(autoincrement())
-  name     String    @unique
+  name     String    // Name is no longer globally unique
   sku      String    @unique @default(uuid())
   products Product[]
+  menuId   Int       // Added: Foreign key to Menu
+  menu     Menu      @relation(fields: [menuId], references: [id]) // Added: Relation field
+
+  @@unique([menuId, name]) // Added: Name must be unique within a menu
 }
 
 model Product {
@@ -141,7 +154,7 @@ model OrderItem {
   comment            String?
   status             String              @default("ACTIVE") // "ACTIVE" or "VOIDED"
   voidedAt           DateTime?
-  voidType           String? // "SHORT" or "LONG"
+  voidType           String?             // "SHORT" or "LONG"
   discountId         Int?
   discount           Discount?           @relation(fields: [discountId], references: [id])
 }
@@ -158,11 +171,17 @@ model OrderItemModifier {
   @@unique([orderItemId, modifierOptionId, displayOrder])
 }
 
+// --- NEW: POS Settings Model ---
+model PosSetting {
+  id    Int     @id @default(autoincrement())
+  key   String  @unique // e.g., "menu_Dine-In", "menu_Takeaway"
+  value String  // e.g., "1" (representing the Menu ID)
+}
+
 model User {
   id         Int      @id @default(autoincrement())
   name       String
   pin        String?
-  // --- UPDATED: 'role' is now a relation to the Role model ---
   roleId     Int
   role       Role     @relation(fields: [roleId], references: [id])
   hourlyRate Float?
@@ -179,3 +198,5 @@ model Shift {
   userId   Int
   user     User      @relation(fields: [userId], references: [id])
 }
+
+// NOTE: Implicit many-to-many relation table for Role and Permission is handled by Prisma

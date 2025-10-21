@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Category Functions
   getCategories: () => ipcRenderer.invoke('get-categories'),
-  addCategory: (name) => ipcRenderer.invoke('add-category', name),
+  addCategory: (data) => ipcRenderer.invoke('add-category', data), // Expects { name, menuId }
   updateCategory: (data) => ipcRenderer.invoke('update-category', data),
   deleteCategory: (id) => ipcRenderer.invoke('delete-category', id),
 
@@ -77,10 +77,22 @@ contextBridge.exposeInMainWorld('api', {
   updateDiscount: (data) => ipcRenderer.invoke('update-discount', data),
   deactivateDiscount: (id) => ipcRenderer.invoke('deactivate-discount', id),
 
-  // --- NEW: Role & Permission Functions ---
+  // Role & Permission Functions
   getRoles: () => ipcRenderer.invoke('get-roles'),
   getPermissions: () => ipcRenderer.invoke('get-permissions'),
   createRole: (data) => ipcRenderer.invoke('create-role', data),
   updateRole: (data) => ipcRenderer.invoke('update-role', data),
   deleteRole: (id) => ipcRenderer.invoke('delete-role', id),
+
+  // Menu Functions
+  getMenus: (options) => ipcRenderer.invoke('get-menus', options),
+  addMenu: (data) => ipcRenderer.invoke('add-menu', data),
+  updateMenu: (data) => ipcRenderer.invoke('update-menu', data),
+  deleteMenu: (id) => ipcRenderer.invoke('delete-menu', id),
+
+  // --- NEW: Setting Functions ---
+  getPosSettings: () => ipcRenderer.invoke('get-pos-settings'),
+  getPosSetting: (key) => ipcRenderer.invoke('get-pos-setting', key),
+  setPosSetting: (data) => ipcRenderer.invoke('set-pos-setting', data), // Expects { key, value }
+  setPosSettings: (settingsMap) => ipcRenderer.invoke('set-pos-settings', settingsMap), // Expects { key1: value1, ... }
 });

@@ -31,10 +31,11 @@
     },
     {
       "name": "Fillet Sides (Custom Rule)",
-      "description": "This is an example of a manual override, without using a 'type'.",
-      "minSelection": 1,
+      "description": "Pick exactly 2 sides. Some cost more points.",
+      "minSelection": 2,
       "selectionBudget": 2,
       "maxSelections": 2,
+      "exactBudgetRequired": true,
       "options": [
         { "name": "French Fries", "priceAdjustment": 0.00, "selectionCost": 1 },
         { "name": "Mashed Potatoes", "priceAdjustment": 0.00, "selectionCost": 1 },
@@ -56,58 +57,113 @@
       ]
     }
   ],
-  "categories": [
+  "menus": [
     {
-      "name": "Main Courses",
-      "sku": "MAIN",
-      "products": [
+      "name": "Main Menu",
+      "isActive": true,
+      "categories": [
         {
-          "name": "Beef Fillet",
-          "sku": "MAIN-FILLET",
-          "price": 28.00,
-          "modifierGroups": ["Steak Cooking Level", "Fillet Sides (Custom Rule)"]
+          "name": "Main Courses",
+          "sku": "MAIN",
+          "products": [
+            {
+              "name": "Beef Fillet",
+              "sku": "MAIN-FILLET",
+              "price": 28.00,
+              "modifierGroups": ["Steak Cooking Level", "Fillet Sides (Custom Rule)"]
+            },
+            {
+              "name": "Margherita Pizza",
+              "sku": "MAIN-PIZZA",
+              "price": 14.00,
+              "modifierGroups": ["Pizza Toppings"]
+            },
+            {
+              "name": "Chicken Burger",
+              "sku": "MAIN-CBURG",
+              "price": 15.50,
+              "description": "Grilled chicken breast with lettuce, tomato, and mayo.",
+              "modifierGroups": []
+            }
+          ]
         },
         {
-          "name": "Margherita Pizza",
-          "sku": "MAIN-PIZZA",
-          "price": 14.00,
-          "modifierGroups": ["Pizza Toppings"]
+          "name": "Hot Drinks",
+          "sku": "DRINK-HOT",
+          "products": [
+            {
+              "name": "Latte",
+              "sku": "HOT-LATTE",
+              "price": 4.50,
+              "modifierGroups": ["Coffee Milk Options", "Syrup Flavors (Optional)"]
+            },
+            {
+              "name": "Espresso",
+              "sku": "HOT-ESP",
+              "price": 3.00,
+              "modifierGroups": []
+            }
+          ]
+        },
+        {
+          "name": "Cold Drinks",
+          "sku": "DRINK-COLD",
+          "products": [
+            {
+              "name": "Iced Tea",
+              "sku": "COLD-TEA",
+              "price": 3.50,
+              "modifierGroups": []
+            },
+            {
+              "name": "Bottled Water",
+              "sku": "COLD-H2O",
+              "price": 2.00,
+              "modifierGroups": []
+            }
+          ]
         }
       ]
     },
     {
-      "name": "Hot Drinks",
-      "sku": "DRINK-HOT",
-      "products": [
-        {
-          "name": "Latte",
-          "sku": "HOT-LATTE",
-          "price": 4.50,
-          "modifierGroups": ["Coffee Milk Options", "Syrup Flavors (Optional)"]
+      "name": "Breakfast Menu",
+      "isActive": false,
+      "categories": [
+         {
+          "name": "Breakfast Items",
+          "sku": "BRK-ITEMS",
+          "products": [
+            {
+              "name": "Pancakes",
+              "sku": "BRK-PANCAKE",
+              "price": 9.00,
+              "modifierGroups": ["Syrup Flavors (Optional)"]
+            },
+            {
+              "name": "Omelette",
+              "sku": "BRK-OMELETTE",
+              "price": 11.00,
+              "modifierGroups": []
+            }
+          ]
         },
         {
-          "name": "Espresso",
-          "sku": "HOT-ESP",
-          "price": 3.00,
-          "modifierGroups": []
-        }
-      ]
-    },
-    {
-      "name": "Cold Drinks",
-      "sku": "DRINK-COLD",
-      "products": [
-        {
-          "name": "Iced Tea",
-          "sku": "COLD-TEA",
-          "price": 3.50,
-          "modifierGroups": []
-        },
-        {
-          "name": "Bottled Water",
-          "sku": "COLD-H2O",
-          "price": 2.00,
-          "modifierGroups": []
+          "name": "Hot Drinks",
+          "sku": "BRK-DRINK-HOT", 
+          "products": [
+            {
+              "name": "Latte",
+              "sku": "BRK-HOT-LATTE", 
+              "price": 4.00, 
+              "modifierGroups": ["Coffee Milk Options", "Syrup Flavors (Optional)"]
+            },
+            {
+              "name": "Filter Coffee",
+              "sku": "BRK-HOT-COFFEE",
+              "price": 3.50,
+              "modifierGroups": ["Coffee Milk Options"]
+            }
+          ]
         }
       ]
     }

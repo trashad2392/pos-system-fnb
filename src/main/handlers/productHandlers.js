@@ -8,7 +8,13 @@ function setupProductHandlers() {
       where: { isArchived: false },
       orderBy: { id: 'asc' },
       include: {
-        category: true,
+        // --- MODIFIED: Include menu within category ---
+        category: {
+          include: {
+            menu: true, // Include the menu data associated with the category
+          },
+        },
+        // --- End Modification ---
         modifierGroups: {
           orderBy: {
             displayOrder: 'asc',
@@ -28,7 +34,7 @@ function setupProductHandlers() {
       },
     });
 
-    // Data structuring to match what the old frontend code expects
+    // Data structuring remains the same as before
     return products.map(p => {
       const { modifierGroups, ...restOfProduct } = p;
       const formattedModifierGroups = modifierGroups.map(pmg => {
@@ -61,7 +67,6 @@ function setupProductHandlers() {
     }
   });
 
-  // CORRECTED UPDATE HANDLER
   ipcMain.handle('update-product', (e, { id, data }) => {
     const { modifierGroups, ...productData } = data;
     const productId = parseInt(id);

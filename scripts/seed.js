@@ -12,13 +12,14 @@ const permissions = [
   { name: 'settings:manage_roles', description: 'Can create/edit roles and their permissions' },
   { name: 'discounts:apply', description: 'Can apply discounts to orders and items' },
   { name: 'discounts:manage', description: 'Can create and edit discounts' },
+  // --- ADDED THIS LINE ---
+  { name: 'settings:manage_pos', description: 'Can assign menus to POS order types' },
 ];
 
 async function main() {
   console.log('Start seeding...');
 
   // --- Clean up old data to prevent conflicts ---
-  // The order is important due to foreign key constraints
   await prisma.shift.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.role.deleteMany({});
@@ -27,70 +28,88 @@ async function main() {
 
   // --- Create all permissions ---
   for (const p of permissions) {
-    await prisma.permission.create({
-      data: { name: p.name },
+    // Use upsert to avoid errors if run multiple times, though deleteMany should handle it
+    await prisma.permission.upsert({
+        where: { name: p.name },
+        update: {},
+        create: { name: p.name },
     });
   }
-  console.log(`Created ${permissions.length} permissions.`);
+  console.log(`Created/Ensured ${permissions.length} permissions.`);
 
   // --- Create default roles and connect them to permissions ---
   const allPermissions = await prisma.permission.findMany();
   const allPermissionIds = allPermissions.map(p => ({ id: p.id }));
-  
+
   const cashierPermissions = await prisma.permission.findMany({
     where: { name: { in: ['pos:access', 'discounts:apply'] } },
   });
   const cashierPermissionIds = cashierPermissions.map(p => ({ id: p.id }));
 
   const managerPermissions = await prisma.permission.findMany({
-    where: { name: { not: 'settings:manage_roles' } } // Manager gets everything except role management
+    // Manager gets everything except role management (will include settings:manage_pos now)
+    where: { name: { not: 'settings:manage_roles' } }
   });
   const managerPermissionIds = managerPermissions.map(p => ({ id: p.id }));
 
-  const adminRole = await prisma.role.create({
-    data: {
+  // Admin Role - gets all permissions
+  const adminRole = await prisma.role.upsert({
+    where: { name: 'Admin' },
+    update: { permissions: { set: allPermissionIds } }, // Ensure it has all current permissions
+    create: {
       name: 'Admin',
       permissions: { connect: allPermissionIds },
     },
   });
-  console.log('Created "Admin" role with all permissions.');
-  
-  const managerRole = await prisma.role.create({
-    data: {
+  console.log('Created/Updated "Admin" role with all permissions.');
+
+  // Manager Role
+  const managerRole = await prisma.role.upsert({
+     where: { name: 'Manager' },
+     update: { permissions: { set: managerPermissionIds } }, // Update permissions
+     create: {
         name: 'Manager',
         permissions: { connect: managerPermissionIds }
     }
   });
-  console.log('Created "Manager" role.');
+  console.log('Created/Updated "Manager" role.');
 
-  const cashierRole = await prisma.role.create({
-    data: {
+  // Cashier Role
+  const cashierRole = await prisma.role.upsert({
+    where: { name: 'Cashier' },
+    update: { permissions: { set: cashierPermissionIds } }, // Update permissions
+    create: {
       name: 'Cashier',
       permissions: { connect: cashierPermissionIds },
     },
   });
-  console.log('Created "Cashier" role with limited permissions.');
+  console.log('Created/Updated "Cashier" role with limited permissions.');
 
   // --- Create default users and assign them roles ---
-  await prisma.user.create({
-    data: {
+  // Use upsert for users too, updating roleId if they exist
+  await prisma.user.upsert({
+    where: { id: 1 }, // Assuming Admin might have ID 1, adjust if needed or use a unique field like name if defined
+    update: { roleId: adminRole.id },
+    create: {
       name: 'Admin',
       pin: '1234',
       hourlyRate: 50.0,
       roleId: adminRole.id,
     },
   });
-  console.log('Created default Admin user with PIN 1234.');
+  console.log('Created/Updated default Admin user with PIN 1234.');
 
-  await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+     where: { id: 2 }, // Assuming Cashier might have ID 2
+     update: { roleId: cashierRole.id },
+     create: {
       name: 'Cashier',
       pin: '1111',
       hourlyRate: 20.0,
       roleId: cashierRole.id,
     },
   });
-  console.log('Created default Cashier user with PIN 1111.');
+  console.log('Created/Updated default Cashier user with PIN 1111.');
 
   console.log('Seeding finished.');
 }

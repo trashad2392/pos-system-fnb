@@ -2,16 +2,18 @@
 const { ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const { prisma } = require('../../lib/db');
-// NEW: We now import our shared template definitions
+// We still need modifier templates for potential default configurations
 const { modifierTemplates } = require('../../lib/modifierTemplates');
 
 function setupImportHandlers() {
   ipcMain.handle('open-file-dialog', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openFile'],
-      filters: [{ name: 'JSON Files', extensions: ['json'] }]
+      filters: [{ name: 'JSON Files', extensions: ['json'] }],
     });
-    if (canceled || filePaths.length === 0) { return null; }
+    if (canceled || filePaths.length === 0) {
+      return null;
+    }
     try {
       const content = fs.readFileSync(filePaths[0], 'utf-8');
       return content;
@@ -22,95 +24,160 @@ function setupImportHandlers() {
   });
 
   ipcMain.handle('import-menu-from-json', async (e, jsonContent) => {
-    const data = JSON.parse(jsonContent);
+    let data;
+    try {
+      data = JSON.parse(jsonContent);
+    } catch (error) {
+      throw new Error(`Invalid JSON format: ${error.message}`);
+    }
+
+    if (!data.menus || !Array.isArray(data.menus)) {
+        throw new Error('Invalid import format: Missing top-level "menus" array.');
+    }
+
     await prisma.$transaction(async (tx) => {
-      // Clear existing menu data
+      // Clear existing menu data in the correct order
       await tx.productModifierGroup.deleteMany({});
+      await tx.orderItemModifier.deleteMany({}); // Added for safety
       await tx.orderItem.deleteMany({});
       await tx.product.deleteMany({});
+      await tx.category.deleteMany({});
       await tx.modifierOption.deleteMany({});
       await tx.modifierGroup.deleteMany({});
-      await tx.category.deleteMany({});
-      
-      const groupMap = new Map();
+      await tx.menu.deleteMany({}); // Clear menus too
 
-      if (data.modifierGroups) {
+      // --- 1. Create Modifier Groups ---
+      const groupMap = new Map(); // Map group name -> created group ID
+      if (data.modifierGroups && Array.isArray(data.modifierGroups)) {
         for (const group of data.modifierGroups) {
-          
-          // --- NEW: Smart Template Logic ---
-          let groupConfig = {};
+          if (!group.name) {
+            console.warn('Skipping modifier group with no name:', group);
+            continue;
+          }
 
-          // If a "type" is specified in the JSON, find its template configuration
+          let groupConfig = {};
           if (group.type) {
-            const template = modifierTemplates.find(t => t.name === group.type);
+            const template = modifierTemplates.find((t) => t.name === group.type);
             if (template) {
               groupConfig = template.config;
             } else {
-              console.warn(`Warning: Modifier group type "${group.type}" not found in templates. Manual values will be used.`);
+              console.warn(
+                `Warning: Modifier group type "${group.type}" not found. Using defaults/JSON values.`
+              );
             }
           }
-          
-          // Combine template config with any direct values from the JSON.
-          // This allows a user to use a template but override one specific rule if needed.
+
           const finalGroupData = {
-            ...groupConfig,
-            name: group.name, // The name always comes from the JSON
-            minSelection: group.minSelection ?? groupConfig.minSelection,
-            selectionBudget: group.selectionBudget ?? groupConfig.selectionBudget,
-            maxSelections: group.maxSelections ?? groupConfig.maxSelections,
-            maxSelectionsSyncedToOptionCount: group.maxSelectionsSyncedToOptionCount ?? groupConfig.maxSelectionsSyncedToOptionCount,
-            allowRepeatedSelections: group.allowRepeatedSelections ?? groupConfig.allowRepeatedSelections,
-            exactBudgetRequired: group.exactBudgetRequired ?? groupConfig.exactBudgetRequired
+            ...groupConfig, // Start with template defaults
+            name: group.name, // Name always from JSON
+            // Override with JSON values if they exist
+            minSelection: group.minSelection ?? groupConfig.minSelection ?? 0,
+            selectionBudget: group.selectionBudget ?? groupConfig.selectionBudget ?? 1,
+            maxSelections: group.maxSelections === null ? null : (group.maxSelections ?? groupConfig.maxSelections), // Handle null explicitly
+            maxSelectionsSyncedToOptionCount: group.maxSelectionsSyncedToOptionCount ?? groupConfig.maxSelectionsSyncedToOptionCount ?? false,
+            allowRepeatedSelections: group.allowRepeatedSelections ?? groupConfig.allowRepeatedSelections ?? false,
+            exactBudgetRequired: group.exactBudgetRequired ?? groupConfig.exactBudgetRequired ?? false,
           };
-          // --- END NEW LOGIC ---
 
           const newGroup = await tx.modifierGroup.create({
             data: {
               ...finalGroupData,
               options: {
-                create: group.options.map(opt => ({
-                  name: opt.name,
-                  priceAdjustment: opt.priceAdjustment,
-                  selectionCost: opt.selectionCost,
+                create: (group.options || []).map((opt) => ({
+                  name: opt.name || 'Unnamed Option',
+                  priceAdjustment: opt.priceAdjustment || 0,
+                  selectionCost: opt.selectionCost === undefined ? 1 : opt.selectionCost, // Default cost to 1
                 })),
               },
             },
           });
           groupMap.set(group.name, newGroup.id);
         }
+      } else {
+        console.log("No modifier groups found in import file.");
       }
 
-      if (data.categories) {
-        for (const category of data.categories) {
-          const createdCategory = await tx.category.create({
-            data: {
-              name: category.name,
-              sku: category.sku,
-            }
-          });
+      // --- 2. Create Menus, Categories, and Products ---
+      for (const menu of data.menus) {
+        if (!menu.name) {
+          console.warn('Skipping menu with no name:', menu);
+          continue;
+        }
 
-          for (const prod of category.products) {
-            const createdProduct = await tx.product.create({
+        const createdMenu = await tx.menu.create({
+          data: {
+            name: menu.name,
+            isActive: menu.isActive !== undefined ? menu.isActive : true, // Default to active
+          },
+        });
+
+        if (menu.categories && Array.isArray(menu.categories)) {
+          for (const category of menu.categories) {
+            if (!category.name) {
+              console.warn('Skipping category with no name:', category);
+              continue;
+            }
+
+            const createdCategory = await tx.category.create({
               data: {
-                name: prod.name,
-                sku: prod.sku,
-                price: prod.price,
-                categoryId: createdCategory.id,
-              }
+                name: category.name,
+                sku: category.sku || `CAT-${Date.now()}-${Math.random()}`, // Generate SKU if missing
+                menuId: createdMenu.id, // Link to the menu
+              },
             });
 
-            if (prod.modifierGroups && prod.modifierGroups.length > 0) {
-              const links = prod.modifierGroups.map((groupName, index) => ({
-                productId: createdProduct.id,
-                modifierGroupId: groupMap.get(groupName),
-                displayOrder: index,
-              }));
-              await tx.productModifierGroup.createMany({ data: links });
+            if (category.products && Array.isArray(category.products)) {
+              for (const prod of category.products) {
+                if (!prod.name || !prod.sku) {
+                  console.warn('Skipping product with missing name or SKU:', prod);
+                  continue;
+                }
+
+                const createdProduct = await tx.product.create({
+                  data: {
+                    name: prod.name,
+                    sku: prod.sku,
+                    price: prod.price || 0,
+                    image: prod.image || null, // Add image if present
+                    description: prod.description || null, // Add description if present
+                    categoryId: createdCategory.id, // Link to the category
+                  },
+                });
+
+                // Link modifier groups if specified
+                if (prod.modifierGroups && Array.isArray(prod.modifierGroups)) {
+                  const links = prod.modifierGroups
+                    .map((groupName, index) => {
+                      const modifierGroupId = groupMap.get(groupName);
+                      if (!modifierGroupId) {
+                        console.warn(
+                          `Modifier group "${groupName}" specified for product "${prod.name}" not found. Skipping link.`
+                        );
+                        return null; // Skip if group wasn't found/created
+                      }
+                      return {
+                        productId: createdProduct.id,
+                        modifierGroupId: modifierGroupId,
+                        displayOrder: index,
+                      };
+                    })
+                    .filter((link) => link !== null); // Filter out skipped links
+
+                  if (links.length > 0) {
+                    await tx.productModifierGroup.createMany({ data: links });
+                  }
+                }
+              } // end product loop
+            } else {
+              console.log(`No products found for category "${category.name}" in menu "${menu.name}".`);
             }
-          }
+          } // end category loop
+        } else {
+           console.log(`No categories found for menu "${menu.name}".`);
         }
-      }
-    });
+      } // end menu loop
+    }); // end transaction
+
     return { success: true, message: 'Menu imported successfully!' };
   });
 }
