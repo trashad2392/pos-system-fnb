@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Modal, Title, Text, Button, Group, Divider, Box, Chip, Progress, Badge, Grid, Paper, ScrollArea } from '@mantine/core';
+import { Modal, Title, Text, Button, Group, Divider, Box, Chip, Progress, Badge, Grid, Paper, ScrollArea, UnstyledButton, Stack } from '@mantine/core'; // Added UnstyledButton, Stack
 
 // --- Helper Hook to get previous value ---
 function usePrevious(value) {
@@ -13,8 +13,9 @@ function usePrevious(value) {
   return ref.current;
 }
 
-// --- Summary Panel Component ---
+// --- Summary Panel Component (Unchanged) ---
 function SummaryPanel({ product, sortedModifierGroups, selections, totalPrice }) {
+  // ... (Keep the existing SummaryPanel code here) ...
   return (
     <Paper withBorder p="md" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Title order={4}>Order Summary</Title>
@@ -72,7 +73,9 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
 
   const currentGroup = useMemo(() => sortedModifierGroups[currentStep], [sortedModifierGroups, currentStep]);
 
+  // --- derivedState (Unchanged) ---
   const derivedState = useMemo(() => {
+    // ... (Keep the existing derivedState code here) ...
     if (!currentGroup) {
       return { pointsUsed: 0, itemsUsed: 0, effectiveMaxSelections: null, isMinMet: false };
     }
@@ -101,7 +104,9 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
 
   const { pointsUsed, itemsUsed, effectiveMaxSelections, isMinMet } = derivedState;
 
+  // --- useEffect hooks (Unchanged) ---
   useEffect(() => {
+    // ... (Keep the existing useEffect hooks here) ...
     if (opened && product) {
       setCurrentStep(0);
       setSelections({});
@@ -111,7 +116,6 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
   }, [opened, product]);
 
   useEffect(() => {
-    // Reset locked cost when the step (currentGroup) changes
     setLockedCost(null);
   }, [currentStep]);
 
@@ -131,11 +135,12 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
     setTotalPrice(newTotal);
   }, [selections, product, sortedModifierGroups]);
 
+  // --- handleNextOrFinish, handleBack (Unchanged) ---
   const handleNextOrFinish = useCallback(() => {
+    // ... (Keep the existing handleNextOrFinish code here) ...
     const isFinalStep = currentStep === sortedModifierGroups.length - 1;
     if (isFinalStep) {
       const finalModifiers = [];
-      // This ensures we respect the group display order
       sortedModifierGroups.forEach(group => {
         const groupSelections = selections[group.id];
         if (groupSelections) {
@@ -154,36 +159,38 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
   }, [currentStep, sortedModifierGroups, selections, onConfirm, product]);
 
   const handleBack = () => {
+    // ... (Keep the existing handleBack code here) ...
     if (currentStep > 0) {
       const prevStepIndex = currentStep - 1;
       const prevGroup = sortedModifierGroups[prevStepIndex];
-
       if (prevGroup) {
         const newSelections = { ...selections };
         delete newSelections[prevGroup.id];
         setSelections(newSelections);
       }
-
       setCurrentStep(prevStepIndex);
     }
   };
 
+  // --- Auto-advance useEffect (Unchanged) ---
   useEffect(() => {
+    // ... (Keep the existing auto-advance useEffect code here) ...
     const navigatedBackwards = typeof prevStep !== 'undefined' && prevStep > currentStep;
     if (navigatedBackwards || !currentGroup || !opened) {
       return;
     }
-
     const maxItemsMet = effectiveMaxSelections !== null && itemsUsed >= effectiveMaxSelections;
     const budgetMet = pointsUsed >= currentGroup.selectionBudget;
-
     if ((maxItemsMet || budgetMet) && itemsUsed > 0) {
       const timer = setTimeout(() => handleNextOrFinish(), 300);
       return () => clearTimeout(timer);
     }
   }, [currentStep, prevStep, itemsUsed, pointsUsed, currentGroup, opened, effectiveMaxSelections, handleNextOrFinish]);
 
+
+  // --- handleSelectionChange (Unchanged) ---
   const handleSelectionChange = (groupId, option) => {
+    // ... (Keep the existing handleSelectionChange code here) ...
     const groupSelections = selections[groupId] || {};
     const newGroupSelections = { ...groupSelections };
     const isCurrentlySelected = !!newGroupSelections[option.id];
@@ -231,28 +238,24 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
     setSelections({ ...selections, [groupId]: newGroupSelections });
   };
 
+  // --- buttonState memo (Unchanged) ---
   const buttonState = useMemo(() => {
+    // ... (Keep the existing buttonState code here) ...
     if (!currentGroup) return { show: false };
-
     const isFixedQuantity = effectiveMaxSelections !== null && currentGroup.minSelection === effectiveMaxSelections;
-
     if (isFixedQuantity || currentGroup.exactBudgetRequired) {
       return { show: false };
     }
-
     if (!isMinMet) {
       return { show: false };
     }
-
     const isFinalStep = currentStep === sortedModifierGroups.length - 1;
     let text = isFinalStep ? 'Confirm' : 'Next';
     if (currentGroup.minSelection === 0 && itemsUsed === 0) {
       text = 'Skip';
     }
-
     return { show: true, text, enabled: isMinMet };
   }, [currentGroup, itemsUsed, currentStep, sortedModifierGroups.length, effectiveMaxSelections, isMinMet]);
-
 
   if (!product || !opened || !currentGroup) return null;
 
@@ -261,22 +264,26 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
       opened={opened}
       onClose={onClose}
       title={`Customize ${product.name}`}
-      size="xl"
-      withCloseButton // <-- This is the main change
-      closeOnClickOutside // <-- This is a nice addition for UX
-      closeOnEscape // <-- This is also a nice addition
+      // --- MODIFICATION: Increased size ---
+      size="90%"
+      // --- End Modification ---
+      withCloseButton
+      closeOnClickOutside
+      closeOnEscape
     >
       <Grid>
-        <Grid.Col span={4}>
+        {/* --- Summary Panel (Unchanged) --- */}
+        <Grid.Col span={{ base: 12, md: 4 }}> {/* Adjusted span for responsiveness */}
           <SummaryPanel product={product} sortedModifierGroups={sortedModifierGroups} selections={selections} totalPrice={totalPrice} />
         </Grid.Col>
 
-        <Grid.Col span={8}>
+        {/* --- Options Panel --- */}
+        <Grid.Col span={{ base: 12, md: 8 }}> {/* Adjusted span for responsiveness */}
           <Progress value={((currentStep + 1) / sortedModifierGroups.length) * 100} mb="md" />
           <Box style={{ minHeight: '50vh', position: 'relative' }}>
             <Group justify="space-between">
               <Title order={4}>{currentGroup.name}</Title>
-              <Text size="sm" c="dimmed">Points used: {pointsUsed} / {currentGroup.selectionBudget}</Text>
+              {/* Points counter removed in previous step */}
             </Group>
             <Text size="sm" c="dimmed">
               {currentGroup.minSelection > 0 ? `Choose at least ${currentGroup.minSelection}.` : 'Optional.'}
@@ -284,47 +291,66 @@ export default function ModifierModal({ product, opened, onClose, onConfirm }) {
             </Text>
             <Divider my="md" />
 
-            <ScrollArea style={{ height: 'calc(50vh - 80px)' }}>
-              <Group mt="xs" gap="md">
+            <ScrollArea style={{ height: 'calc(50vh - 80px)' /* Adjusted height maybe needed */ }}>
+              {/* --- MODIFICATION START: Replaced Chip Group with Grid --- */}
+              <Grid gutter="sm">
                 {currentGroup.options
                   .filter(option => {
+                    // Filter logic remains the same
                     const isSelected = !!(selections[currentGroup.id] && selections[currentGroup.id][option.id]);
-                    if (lockedCost !== null && option.selectionCost !== lockedCost) {
-                      return false;
-                    }
-                    if (!isSelected && (pointsUsed + option.selectionCost > currentGroup.selectionBudget)) {
-                      return false;
-                    }
+                    if (lockedCost !== null && option.selectionCost !== lockedCost) return false;
+                    if (!isSelected && (pointsUsed + option.selectionCost > currentGroup.selectionBudget)) return false;
                     return true;
                   })
                   .map(option => {
                     const quantity = (selections[currentGroup.id] && selections[currentGroup.id][option.id]) || 0;
+                    const isSelected = quantity > 0;
+
                     return (
-                      <Chip
-                        key={option.id}
-                        value={option.id.toString()}
-                        checked={quantity > 0}
-                        onChange={() => handleSelectionChange(currentGroup.id, option)}
-                        variant="outline"
-                        size="lg"
-                        radius="md"
-                      >
-                        <Group gap="xs">
-                          <Text>{option.name}</Text>
-                          {currentGroup.allowRepeatedSelections && quantity > 0 && (<Badge variant="light" size="lg">{quantity}</Badge>)}
-                          <Text size="sm" c="dimmed">
-                            ({option.selectionCost}pt) {option.priceAdjustment > 0 ? `(+$${option.priceAdjustment.toFixed(2)})` : ''}
-                          </Text>
-                        </Group>
-                      </Chip>
+                      <Grid.Col span={{ base: 6, sm: 4, md: 3 }} key={option.id}> {/* Adjust span as needed */}
+                        <UnstyledButton
+                          onClick={() => handleSelectionChange(currentGroup.id, option)}
+                          style={{ width: '100%', height: '100%' }}
+                        >
+                          <Paper
+                            withBorder
+                            shadow="sm"
+                            p="sm" // Adjust padding
+                            radius="md"
+                            style={{
+                              height: '100px', // Adjust height as needed
+                              display: 'flex',
+                              flexDirection: 'column',
+                              border: isSelected ? `2px solid var(--mantine-color-blue-6)` : undefined,
+                              backgroundColor: isSelected ? 'var(--mantine-color-blue-0)' : undefined,
+                            }}
+                          >
+                            <Stack align="center" justify="center" gap={4} style={{ flexGrow: 1 }}>
+                              <Text size="sm" ta="center" wrap="wrap">
+                                {option.name}
+                              </Text>
+                              {option.priceAdjustment > 0 && (
+                                <Text size="xs" c="dimmed">
+                                  {`(+$${option.priceAdjustment.toFixed(2)})`}
+                                </Text>
+                              )}
+                              {currentGroup.allowRepeatedSelections && quantity > 0 && (
+                                <Badge variant="light" size="sm" mt="xs">{quantity}</Badge>
+                              )}
+                            </Stack>
+                          </Paper>
+                        </UnstyledButton>
+                      </Grid.Col>
                     );
                   })}
-              </Group>
+              </Grid>
+              {/* --- MODIFICATION END --- */}
             </ScrollArea>
           </Box>
         </Grid.Col>
       </Grid>
 
+      {/* --- Footer Buttons (Unchanged) --- */}
       <Group justify="space-between" align="center" mt="md" pt="sm" style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
         <Button variant="default" onClick={handleBack} disabled={currentStep === 0}>Back</Button>
         {buttonState.show && (

@@ -103,33 +103,30 @@ export function useOrderManagement() {
     }
   };
 
+  // --- MODIFICATION START ---
+  // Simplified discount handler
   const handleSelectDiscount = async (discountTarget, discountId) => {
-    if (!activeOrder || !discountTarget) return;
+    // discountTarget is now always the order, but we still need activeOrder check
+    if (!activeOrder) return;
     try {
-      let updatedOrder;
-      if (discountTarget.product) { // Item discount
-        updatedOrder = await window.api.applyDiscountToItem({
-          orderId: activeOrder.id,
-          orderItemId: discountTarget.id,
-          discountId: discountId,
-        });
-      } else { // Order discount (target is the order itself)
-        updatedOrder = await window.api.applyDiscountToOrder({
-          orderId: activeOrder.id,
-          discountId: discountId,
-        });
-      }
+      // Always apply to the order
+      const updatedOrder = await window.api.applyDiscountToOrder({
+        orderId: activeOrder.id,
+        discountId: discountId, // Pass null to remove
+      });
+
       setActiveOrder(updatedOrder); // Update state here
       notifications.show({
         title: 'Success',
-        message: discountId ? 'Discount applied.' : 'Discount removed.',
+        message: discountId ? 'Order discount applied.' : 'Order discount removed.',
         color: 'green',
       });
     } catch (error) {
-      notifications.show({ title: 'Error', message: `Failed to apply discount: ${error.message}`, color: 'red' });
+      notifications.show({ title: 'Error', message: `Failed to apply order discount: ${error.message}`, color: 'red' });
     }
-    // Note: Closing the modal is handled by the caller (usePosLogic/useModalState)
+    // Closing the modal is handled by the caller (usePosLogic)
   };
+  // --- MODIFICATION END ---
 
 
   return {

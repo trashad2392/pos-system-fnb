@@ -76,15 +76,14 @@ export default function OrderView({
     return (basePrice + modifiersPrice) * (item.quantity || 0);
   };
 
-
+  // --- MODIFICATION START ---
+  // Always pass the order object to the modal
   const handleDiscountClick = () => {
-    if (selectedItemId) {
-      const item = order?.items?.find(i => i.id === selectedItemId);
-      if (item) onOpenDiscountModal(item);
-    } else if (order) {
-      onOpenDiscountModal(order);
+    if (order) { // Ensure order exists before opening
+      onOpenDiscountModal(order); // Always pass the order object
     }
   };
+  // --- MODIFICATION END ---
 
   const subtotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
   const discountAmount = order ? subtotal - (order.totalAmount || 0) : 0;
@@ -189,9 +188,12 @@ export default function OrderView({
               </Button>
              </Group>
 
+            {/* --- MODIFICATION START --- */}
+            {/* Changed button text */}
              <Button fullWidth variant="light" color="red" leftSection={<IconTag size={16} />} onClick={handleDiscountClick} disabled={isCartEmpty || !order} mb="sm">
-                {selectedItemId ? 'Discount Item' : 'Discount Order'}
+                Discount Order
              </Button>
+            {/* --- MODIFICATION END --- */}
 
             <Divider my="sm" />
 
