@@ -1,0 +1,33 @@
+/* src/app/pos/components/OrderView.module.css */
+
+@keyframes blink-red {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+.flashingAlertMessage {
+  animation: blink-red 1.0s linear infinite; /* Faster blink */
+  color: red !important; /* Force color */
+  font-weight: bold !important; /* Force bold */
+  font-size: 1.2rem !important; /* Slightly larger size */
+  display: inline-block; /* Helps with alignment */
+  vertical-align: middle; /* Align with title */
+  margin-left: 10px; /* Space from title */
+}
+
+/* Keep alert background transparent */
+.transparentAlert {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0 !important; /* Remove padding */
+    display: inline-flex; /* Use flex to align icon and text */
+    align-items: center;
+}
+
+/* Style the icon within the transparent alert */
+.transparentAlert > :first-child { /* Target the icon wrapper */
+    margin-right: 4px !important; /* Space between icon and text */
+    margin-top: -2px; /* Adjust vertical alignment */
+    color: red !important; /* Make icon red */
+}

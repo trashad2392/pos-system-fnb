@@ -2,11 +2,11 @@
 "use client";
 
 import { useDisclosure } from '@mantine/hooks';
-import { useState, useCallback } from 'react'; // Added useCallback
+import { useState, useCallback } from 'react';
 
 export function useModalState() {
   const [modifierModalOpened, { open: openModifierModal, close: closeModifierModal }] = useDisclosure(false);
-  const [paymentModalOpened, { open: openPaymentModal, close: closePaymentModal }] = useDisclosure(false);
+  const [paymentModalOpened, { open: openPaymentModalBase, close: closePaymentModalBase }] = useDisclosure(false); // Renamed base function
   const [heldOrdersModalOpened, { open: openHeldOrdersModal, close: closeHeldOrdersModal }] = useDisclosure(false);
   const [commentModalOpened, { open: openCommentModal, close: closeCommentModal }] = useDisclosure(false);
   const [discountModalOpened, { open: openDiscountModal, close: closeDiscountModal }] = useDisclosure(false);
@@ -16,12 +16,14 @@ export function useModalState() {
   const [commentTarget, setCommentTarget] = useState(null);
   const [discountTarget, setDiscountTarget] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  // --- NEW: State for initial payment tab ---
+  const [paymentModalInitialTab, setPaymentModalInitialTab] = useState('full');
 
-  // --- OPEN functions now use useCallback ---
+  // --- OPEN functions ---
   const handleOpenModifierModal = useCallback((product) => {
     setCustomizingProduct(product);
     openModifierModal();
-  }, [openModifierModal]); // Dependency: the open function from useDisclosure
+  }, [openModifierModal]);
 
   const handleOpenCommentModal = useCallback((target) => {
     setCommentTarget(target);
@@ -33,25 +35,38 @@ export function useModalState() {
     openDiscountModal();
   }, [openDiscountModal]);
 
-  // --- CLOSE functions also use useCallback and clear state ---
-  // We'll expose these specifically named versions consistently
+  // --- MODIFIED: Wrapper for opening payment modal, accepts initial tab ---
+  const openPaymentModal = useCallback((options = {}) => {
+      setPaymentModalInitialTab(options.initialTab || 'full'); // Default to 'full'
+      openPaymentModalBase(); // Call the original open function
+  }, [openPaymentModalBase]);
+
+
+  // --- CLOSE functions ---
   const handleCloseModifierModal = useCallback(() => {
-    setCustomizingProduct(null); // Clear product on close
+    setCustomizingProduct(null);
     closeModifierModal();
   }, [closeModifierModal]);
 
   const handleCloseCommentModal = useCallback(() => {
-    setKeyboardVisible(false); // Always hide keyboard on close
-    // Optionally clear commentTarget: setCommentTarget(null);
+    setKeyboardVisible(false);
+    // setCommentTarget(null); // Optional clear
     closeCommentModal();
   }, [closeCommentModal]);
 
   const handleCloseDiscountModal = useCallback(() => {
-    // Optionally clear discountTarget: setDiscountTarget(null);
+    // setDiscountTarget(null); // Optional clear
     closeDiscountModal();
   }, [closeDiscountModal]);
 
-  // Keyboard toggle remains simple state update
+  // --- MODIFIED: Wrapper for closing payment modal, resets initial tab ---
+  const closePaymentModal = useCallback(() => {
+      closePaymentModalBase();
+      // Reset initial tab after a short delay to avoid flicker if re-opened quickly
+      setTimeout(() => setPaymentModalInitialTab('full'), 100);
+  }, [closePaymentModalBase]);
+
+
   const toggleKeyboard = () => setKeyboardVisible((v) => !v);
 
   return {
@@ -67,22 +82,22 @@ export function useModalState() {
     customizingProduct,
     commentTarget,
     discountTarget,
+    paymentModalInitialTab, // <-- Expose initial tab state
 
-    // --- Expose consistent function names via actions object ---
     actions: {
         // Open functions
-        openPaymentModal,           // Direct from useDisclosure
-        openHeldOrdersModal,        // Direct from useDisclosure
+        openHeldOrdersModal,        // Direct
         handleOpenModifierModal,    // Wrapper
         handleOpenCommentModal,     // Wrapper
         handleOpenDiscountModal,    // Wrapper
+        openPaymentModal,           // <-- Use new wrapper
 
         // Close functions
-        closePaymentModal,          // Direct from useDisclosure
-        closeHeldOrdersModal,       // Direct from useDisclosure
+        closeHeldOrdersModal,       // Direct
         handleCloseModifierModal,   // Wrapper
         handleCloseCommentModal,    // Wrapper
         handleCloseDiscountModal,   // Wrapper
+        closePaymentModal,          // <-- Use new wrapper
 
         // Other controls
         toggleKeyboard,

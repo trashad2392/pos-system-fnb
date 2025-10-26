@@ -10,15 +10,17 @@ import ModifierModal from './components/ModifierModal';
 import PaymentModal from './components/PaymentModal';
 import HeldOrdersModal from './components/HeldOrdersModal';
 import CommentModal from './components/CommentModal';
-import DiscountModal from './components/DiscountModal'; // <-- ADD THIS IMPORT
+import DiscountModal from './components/DiscountModal';
 
 export default function PosPage() {
   const {
-    posView, activeOrder, tables, menu, heldOrders, discounts, // <-- GET DISCOUNTS
+    posView, activeOrder, tables, menu, heldOrders, discounts,
     customizingProduct, modifierModalOpened, paymentModalOpened,
     selectedItemId, heldOrdersModalOpened, isLoading,
     commentModalOpened, commentTarget, keyboardVisible,
-    discountTarget, discountModalOpened, // <-- GET DISCOUNT STATE
+    discountTarget, discountModalOpened,
+    selectedPaymentMethods,
+    paymentModalInitialTab, // <-- Get initial tab state
     actions
   } = usePosLogic();
 
@@ -36,14 +38,16 @@ export default function PosPage() {
           onProductSelect={actions.handleProductSelect}
           onUpdateQuantity={actions.handleUpdateItemQuantity}
           onRemoveItem={actions.handleRemoveItem}
-          onFinalize={actions.openPaymentModal}
+          onFinalize={actions.handleFinalizeOrder}
           onHold={actions.handleHold}
           onClearOrder={actions.handleClearOrder}
           selectedItemId={selectedItemId}
           onSelectItem={actions.handleSelectItem}
           onOpenCommentModal={actions.handleOpenCommentModal}
           onFastCash={actions.handleFastCash}
-          onOpenDiscountModal={actions.handleOpenDiscountModal} // <-- PASS ACTION
+          onOpenDiscountModal={actions.handleOpenDiscountModal}
+          selectedPaymentMethods={selectedPaymentMethods}
+          openPaymentModal={actions.openPaymentModal}
         />;
       case 'table-select':
         return <TableSelectView
@@ -67,20 +71,21 @@ export default function PosPage() {
       <ModifierModal
         product={customizingProduct}
         opened={modifierModalOpened}
-        onClose={actions.closeModifierModal}
+        onClose={actions.closeModifierModal} // Use specific close action
         onConfirm={actions.handleConfirmModifiers}
       />
 
       <PaymentModal
         order={activeOrder}
         opened={paymentModalOpened}
-        onClose={actions.closePaymentModal}
-        onConfirmPayment={actions.handleFinalizeOrder}
+        onClose={actions.closePaymentModal} // Use specific close action
+        onSelectPayment={actions.handleSelectPayment}
+        initialTab={paymentModalInitialTab} // <-- Pass initial tab prop
       />
 
       <HeldOrdersModal
         opened={heldOrdersModalOpened}
-        onClose={actions.closeHeldOrdersModal}
+        onClose={actions.closeHeldOrdersModal} // Use specific close action
         heldOrders={heldOrders}
         onResume={actions.handleResumeHeldOrder}
         onDelete={actions.handleDeleteHeldOrder}
@@ -89,17 +94,16 @@ export default function PosPage() {
 
       <CommentModal
         opened={commentModalOpened}
-        onClose={actions.closeCommentModal}
+        onClose={actions.closeCommentModal} // Use specific close action
         onSave={actions.handleSaveComment}
         target={commentTarget}
         keyboardVisible={keyboardVisible}
         onToggleKeyboard={actions.toggleKeyboard}
       />
 
-      {/* --- ADD THE NEW DISCOUNT MODAL --- */}
       <DiscountModal
         opened={discountModalOpened}
-        onClose={actions.closeDiscountModal}
+        onClose={actions.closeDiscountModal} // Use specific close action
         onSelectDiscount={actions.handleSelectDiscount}
         target={discountTarget}
         discounts={discounts}

@@ -1,10 +1,11 @@
 // src/app/pos/components/PaymentModal.js
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Modal, Title, Text, Button, Group, Divider, Grid, Box, Tabs, Stack, UnstyledButton, Paper } from '@mantine/core';
-import { IconCash, IconCreditCard, IconGiftCard, IconBuildingBank, IconDeviceFloppy, IconWallet } from '@tabler/icons-react';
+import { IconCash, IconCreditCard, IconGiftCard, IconBuildingBank, IconDeviceFloppy, IconWallet, IconCheck } from '@tabler/icons-react';
 import Keypad from './Keypad';
+import { notifications } from '@mantine/notifications';
 
 const paymentMethods = [
   { name: 'Cash', icon: IconCash, color: 'green' },
@@ -15,19 +16,21 @@ const paymentMethods = [
 
 const payInFullMethods = paymentMethods.filter(p => p.name !== 'Cash');
 
-export default function PaymentModal({ opened, onClose, order, onConfirmPayment }) {
+export default function PaymentModal({ opened, onClose, order, onSelectPayment, initialTab = 'full' }) {
   const [splitAmounts, setSplitAmounts] = useState({});
-  const [activeTab, setActiveTab] = useState('full');
-  
-  // State for the new keypad-driven input
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [activeSplitMethod, setActiveSplitMethod] = useState('Card');
   const [keypadInput, setKeypadInput] = useState('');
 
-  const totalAmount = order?.totalAmount || 0;
-  const totalPaid = Object.values(splitAmounts).reduce((sum, amount) => sum + (amount || 0), 0);
-  const remainingAmount = totalAmount - totalPaid;
+  const totalAmount = useMemo(() => order?.totalAmount || 0, [order?.totalAmount]);
 
-  // Reset state when the modal opens or the order changes
+  // Calculate remaining amount (still needed for disabling button)
+  const remainingAmount = useMemo(() => {
+    const totalPaid = Object.values(splitAmounts).reduce((sum, amount) => sum + (amount || 0), 0);
+    return parseFloat((totalAmount - totalPaid).toFixed(2));
+  }, [splitAmounts, totalAmount]);
+
+  // Reset state
   useEffect(() => {
     if (opened && order) {
       const initialAmounts = paymentMethods.reduce((acc, method) => {
@@ -35,98 +38,95 @@ export default function PaymentModal({ opened, onClose, order, onConfirmPayment 
         return acc;
       }, {});
       initialAmounts.Cash = parseFloat(totalAmount.toFixed(2));
-      
       setSplitAmounts(initialAmounts);
-      setActiveTab('full');
-      setActiveSplitMethod('Card'); // Default to Card for editing
+      setActiveTab(initialTab);
+      const firstEditableMethod = paymentMethods.find(p => p.name !== 'Cash')?.name || paymentMethods[0].name;
+      setActiveSplitMethod(initialTab === 'split' ? firstEditableMethod : 'Card');
       setKeypadInput('');
     }
-  }, [opened, order]);
+  }, [opened, order, totalAmount, initialTab]);
 
-  // This effect links the keypadInput to the splitAmounts state
+  // Link keypad
   useEffect(() => {
-    if (activeTab === 'split') {
-      const numericValue = parseInt(keypadInput, 10) / 100 || 0;
+    if (activeTab === 'split' && activeSplitMethod !== 'Cash') {
+      const numericValue = parseInt(keypadInput || '0', 10) / 100;
       handleSplitAmountChange(activeSplitMethod, numericValue);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keypadInput]);
-  
-  // Handler for single-payment finalization
-  const handleSinglePayment = (method) => {
-    onConfirmPayment([{ method, amount: totalAmount }]);
+
+  // Handlers
+  const handleSinglePaymentSelect = (method) => {
+    onSelectPayment([{ method, amount: totalAmount }], 'full');
   };
 
-  // Revised handler for split payment changes
   const handleSplitAmountChange = (method, value) => {
-    const newAmount = value || 0;
-    
-    // Calculate total of all OTHER non-cash methods
-    const otherNonCashTotal = Object.entries(splitAmounts).reduce((sum, [key, amount]) => {
-      if (key !== 'Cash' && key !== method) {
-        return sum + (amount || 0);
-      }
-      return sum;
-    }, 0);
-
-    // The max value for this input is the total order amount minus what's already allocated elsewhere
-    const maxValueForThisInput = totalAmount - otherNonCashTotal;
-    const clampedValue = Math.min(newAmount, maxValueForThisInput);
-
-    const newSplitAmounts = { ...splitAmounts, [method]: clampedValue };
-
-    // Recalculate cash as the remainder
-    const newNonCashTotal = otherNonCashTotal + clampedValue;
-    newSplitAmounts.Cash = parseFloat((totalAmount - newNonCashTotal).toFixed(2));
-
-    setSplitAmounts(newSplitAmounts);
+    if (method === 'Cash') return;
+    const newAmount = Math.max(0, value || 0);
+    setSplitAmounts(prevAmounts => {
+        const currentOtherNonCashTotal = Object.entries(prevAmounts).reduce((sum, [key, amount]) => {
+            if (key !== 'Cash' && key !== method) { return sum + (amount || 0); }
+            return sum;
+        }, 0);
+        const maxAllowed = Math.max(0, totalAmount - currentOtherNonCashTotal);
+        const clampedValue = parseFloat(Math.min(newAmount, maxAllowed).toFixed(2));
+        const newTotalNonCash = currentOtherNonCashTotal + clampedValue;
+        const newCashAmount = parseFloat(Math.max(0, totalAmount - newTotalNonCash).toFixed(2));
+        return { ...prevAmounts, [method]: clampedValue, Cash: newCashAmount };
+    });
   };
-  
-  // When switching active method, update the keypad
+
   const selectSplitMethod = (method) => {
-    if (method === 'Cash') return; // Cash is not editable
+    if (method === 'Cash') return;
     setActiveSplitMethod(method);
-    const currentValue = (splitAmounts[method] * 100).toFixed(0);
+    const currentAmount = splitAmounts[method] ?? 0;
+    const currentValue = (currentAmount * 100).toFixed(0);
     setKeypadInput(currentValue === '0' ? '' : currentValue);
   };
 
-  const handleFinalize = () => {
+  const handleConfirmSplit = () => {
     const payments = Object.entries(splitAmounts)
       .filter(([_, amount]) => amount > 0.001)
-      .map(([method, amount]) => ({ method, amount }));
+      .map(([method, amount]) => ({ method, amount: parseFloat(amount.toFixed(2)) }));
 
-    if (payments.length > 0 && Math.abs(remainingAmount) < 0.001) {
-      onConfirmPayment(payments);
+    if (payments.length > 0 && Math.abs(remainingAmount) < 0.01) {
+       if (Math.abs(remainingAmount) > 0.001 && payments.length > 0 && payments[payments.length - 1].method !== 'Cash') {
+          payments[payments.length - 1].amount = parseFloat((payments[payments.length - 1].amount + remainingAmount).toFixed(2));
+       } else if (Math.abs(remainingAmount) > 0.001 && payments.find(p => p.method === 'Cash')) {
+           const cashPaymentIndex = payments.findIndex(p => p.method === 'Cash');
+           if (cashPaymentIndex !== -1) {
+                payments[cashPaymentIndex].amount = parseFloat((payments[cashPaymentIndex].amount + remainingAmount).toFixed(2));
+           }
+       }
+      const finalPayments = payments.filter(p => p.amount > 0.001);
+      onSelectPayment(finalPayments, 'split');
+    } else {
+        notifications.show({ title: 'Error', message: 'Split amounts do not match total due.', color: 'red' });
     }
   };
 
-  // --- Keypad Handlers ---
   const onNumberPress = (number) => {
-    setKeypadInput((current) => (current + number).slice(0, 8));
+    if (activeSplitMethod === 'Cash') return;
+    if (keypadInput === '0' && number === '0') return;
+    if (keypadInput === '' && number === '0') { setKeypadInput('0'); return; }
+    const newValue = (keypadInput === '0' ? '' : keypadInput) + number;
+    setKeypadInput(newValue.slice(0, 8));
   };
-  const onBackspace = () => {
-    setKeypadInput((current) => current.slice(0, -1));
-  };
-  const onClear = () => {
-    setKeypadInput('');
-  };
+  const onBackspace = () => { if (activeSplitMethod !== 'Cash') setKeypadInput((current) => current.slice(0, -1)); };
+  const onClear = () => { if (activeSplitMethod !== 'Cash') setKeypadInput(''); };
 
   if (!order) return null;
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Payment" size="lg" centered>
+    <Modal opened={opened} onClose={onClose} title="Select Payment Method" size="lg" centered>
       <Group justify="space-between" mb="md">
+        {/* Total Due always visible */}
         <Box>
           <Text size="lg">Total Due:</Text>
           <Title order={1}>${totalAmount.toFixed(2)}</Title>
         </Box>
-        <Box ta="right">
-          <Text size="lg" c={Math.abs(remainingAmount) > 0.001 ? 'red' : 'green'}>Remaining:</Text>
-          <Title order={1} c={Math.abs(remainingAmount) > 0.001 ? 'red' : 'green'}>
-            ${remainingAmount.toFixed(2)}
-          </Title>
-        </Box>
+        {/* --- REMOVED Remaining Amount Box --- */}
       </Group>
-
       <Divider my="md" />
 
       <Tabs value={activeTab} onChange={setActiveTab}>
@@ -140,7 +140,7 @@ export default function PaymentModal({ opened, onClose, order, onConfirmPayment 
           <Grid>
             {payInFullMethods.map(method => (
               <Grid.Col span={6} key={method.name}>
-                <Button fullWidth size="lg" variant="outline" color={method.color} leftSection={<method.icon />} onClick={() => handleSinglePayment(method.name)}>
+                <Button fullWidth size="lg" variant="outline" color={method.color} leftSection={<method.icon />} onClick={() => handleSinglePaymentSelect(method.name)}>
                   {method.name}
                 </Button>
               </Grid.Col>
@@ -153,8 +153,8 @@ export default function PaymentModal({ opened, onClose, order, onConfirmPayment 
                 <Grid.Col span={6}>
                     <Stack>
                         {paymentMethods.map(method => (
-                            <UnstyledButton key={method.name} onClick={() => selectSplitMethod(method.name)}>
-                                <Paper withBorder p="md" bg={activeSplitMethod === method.name ? 'blue.0' : 'transparent'}>
+                            <UnstyledButton key={method.name} onClick={() => selectSplitMethod(method.name)} disabled={method.name === 'Cash'}>
+                                <Paper withBorder p="md" bg={activeSplitMethod === method.name && method.name !== 'Cash' ? 'blue.0' : 'transparent'} opacity={method.name === 'Cash' ? 0.6 : 1}>
                                     <Group justify="space-between">
                                         <Text fw={500} c={method.name === 'Cash' ? 'dimmed' : 'inherit'}>{method.name}</Text>
                                         <Text fw={700}>${(splitAmounts[method.name] || 0).toFixed(2)}</Text>
@@ -170,12 +170,22 @@ export default function PaymentModal({ opened, onClose, order, onConfirmPayment 
             </Grid>
         </Tabs.Panel>
       </Tabs>
-      
-      <Divider my="xl" />
 
-      <Button fullWidth size="xl" h={70} onClick={handleFinalize} disabled={Math.abs(remainingAmount) > 0.001} color="green" leftSection={<IconDeviceFloppy size={24} />}>
-        <Title order={3}>Finalize Order</Title>
-      </Button>
+      {/* Confirm Button for Split */}
+      {activeTab === 'split' && (
+          <>
+              <Divider my="xl" />
+              <Button
+                  fullWidth size="xl" h={70}
+                  onClick={handleConfirmSplit}
+                  disabled={Math.abs(remainingAmount) > 0.01}
+                  color="blue"
+                  leftSection={<IconCheck size={24} />}
+              >
+                  <Title order={3}>Confirm Split</Title>
+              </Button>
+          </>
+      )}
     </Modal>
   );
 }
