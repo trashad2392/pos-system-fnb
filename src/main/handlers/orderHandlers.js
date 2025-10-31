@@ -31,7 +31,7 @@ async function getUpdatedOrder(tx, orderId) {
     where: { id: orderId },
     include: {
       table: true,
-      discount: true,
+      discount: true, // <-- This will now include minimumOrderAmount
       items: {
         orderBy: { id: 'asc' },
         include: {
@@ -58,13 +58,23 @@ async function getUpdatedOrder(tx, orderId) {
   }
 
   let finalTotal = subtotal;
+  
+  // --- START: MODIFIED DISCOUNT LOGIC ---
   if (order.discount) {
-    if (order.discount.type === 'PERCENT') {
-      finalTotal *= (1 - order.discount.value / 100);
-    } else { // FIXED
-      finalTotal -= order.discount.value;
+    // Check if the subtotal meets the minimum required amount
+    const meetsMinimum = (!order.discount.minimumOrderAmount || subtotal >= order.discount.minimumOrderAmount);
+
+    if (meetsMinimum) {
+      // If minimum is met (or 0), apply the discount
+      if (order.discount.type === 'PERCENT') {
+        finalTotal *= (1 - order.discount.value / 100);
+      } else { // FIXED
+        finalTotal -= order.discount.value;
+      }
     }
+    // If meetsMinimum is false, finalTotal simply remains the subtotal
   }
+  // --- END: MODIFIED DISCOUNT LOGIC ---
 
   finalTotal = Math.max(0, finalTotal);
 
@@ -109,14 +119,53 @@ async function getStatsForPeriod(startDate, endDate) {
         }
     });
 
+    // --- MODIFICATION: Need to get subtotal *before* order discount
     const totalRevenue = paidOrders.reduce((sum, order) => {
-        const orderRevenue = order.items.reduce((itemSum, item) => {
+        // We can't just use order.totalAmount because that *includes* the discount.
+        // We must recalculate the subtotal of items that were not voided.
+        const orderSubtotal = order.items.reduce((itemSum, item) => {
             if (item.status !== 'VOIDED') {
+                // calculateOrderItemValue already handles item-level discounts
                 return itemSum + calculateOrderItemValue(item);
             }
             return itemSum;
         }, 0);
-        return sum + orderRevenue;
+        
+        // Now, we *would* apply the order-level discount *if* it was eligible
+        // But for "Total Revenue", we should use the final paid amount.
+        // Let's use order.totalAmount, but we must account for voids.
+        // A simpler way: totalRevenue is the sum of all *payments*.
+        
+        // Let's redefine totalRevenue based on order.totalAmount,
+        // but it must be recalculated based on voiding.
+        
+        // The current `calculateOrderItemValue` is correct for items.
+        // The `getUpdatedOrder` logic is what calculates the true total.
+        // `order.totalAmount` in the DB *should* be correct *after* voiding.
+        
+        // Let's trust the `order.totalAmount` for PAID orders,
+        // but we need to sum up the *remaining* value for VOIDED orders.
+        if (order.status === 'PAID') {
+           return sum + order.totalAmount;
+        }
+
+        // For VOIDED orders, sum up the value of items that are STILL ACTIVE
+        // (which should be 0, but this is safer)
+        const voidedOrderValue = order.items.reduce((itemSum, item) => {
+             if (item.status === 'ACTIVE') { // Should not happen if order is VOIDED, but good practice
+                return itemSum + calculateOrderItemValue(item);
+             }
+             return itemSum;
+        }, 0);
+        // We also need to add back any refundAmount to get the original sale value
+        // This is getting complex.
+        
+        // --- SIMPLER LOGIC ---
+        // `getStatsForPeriod` should sum the `totalAmount` of 'PAID' orders
+        // and add the `totalAmount` (post-void) of 'VOIDED' orders.
+        // `totalAmount` already reflects the final amount charged.
+        return sum + order.totalAmount;
+
     }, 0);
 
     const totalSales = paidOrders.length;
@@ -124,7 +173,7 @@ async function getStatsForPeriod(startDate, endDate) {
 
     const productCounts = paidOrders
         .flatMap(order => order.items)
-        .filter(item => item.status !== 'VOIDED')
+        .filter(item => item.status !== 'VOIDED') // Only count non-voided items
         .reduce((acc, item) => {
             acc[item.product.name] = (acc[item.product.name] || 0) + item.quantity;
             return acc;
@@ -150,7 +199,7 @@ function setupOrderHandlers() {
       const orderItemToVoid = await tx.orderItem.findUnique({
         where: { id: orderItemId },
         include: {
-          order: true,
+          order: { include: { discount: true } }, // <-- Need order discount info
           selectedModifiers: { include: { modifierOption: true } },
           discount: true,
         },
@@ -160,8 +209,14 @@ function setupOrderHandlers() {
       if (orderItemToVoid.status === 'VOIDED') throw new Error('This item has already been voided.');
       if (orderItemToVoid.order.status !== 'PAID') throw new Error('Only items from a paid order can be voided.');
 
-      const itemValue = calculateOrderItemValue(orderItemToVoid);
+      // --- MODIFIED VOID LOGIC ---
+      // We must recalculate the total *before* this item was voided
+      // to see how much the order-level discount was worth.
+      
+      // 1. Get the current order total
+      const originalOrderTotal = orderItemToVoid.order.totalAmount;
 
+      // 2. Mark item as voided
       await tx.orderItem.update({
         where: { id: orderItemId },
         data: {
@@ -171,26 +226,37 @@ function setupOrderHandlers() {
         },
       });
 
-      const updatedOrder = await tx.order.update({
+      // 3. Recalculate the new order total using the *same* function
+      // This will correctly recalculate the subtotal (without this item)
+      // and re-evaluate the order-level discount eligibility.
+      const updatedOrder = await getUpdatedOrder(tx, orderItemToVoid.orderId);
+      const newOrderTotal = updatedOrder.totalAmount;
+      
+      // 4. The refund amount is the difference
+      const refundAmount = Math.max(0, originalOrderTotal - newOrderTotal);
+
+      // 5. Update the order with the new total and refund amount
+      const finalOrder = await tx.order.update({
         where: { id: orderItemToVoid.orderId },
         data: {
-          totalAmount: { decrement: itemValue },
-          refundAmount: { increment: itemValue },
+          totalAmount: newOrderTotal, // Set the new, lower total
+          refundAmount: { increment: refundAmount }, // Log the refund
         },
       });
+      // --- END MODIFIED VOID LOGIC ---
 
       const remainingItems = await tx.orderItem.count({
-          where: { orderId: updatedOrder.id, status: 'ACTIVE' }
+          where: { orderId: finalOrder.id, status: 'ACTIVE' }
       });
 
       if (remainingItems === 0) {
           await tx.order.update({
-              where: { id: updatedOrder.id },
+              where: { id: finalOrder.id },
               data: { status: 'VOIDED' }
           });
       }
 
-      return getUpdatedOrder(tx, updatedOrder.id);
+      return getUpdatedOrder(tx, finalOrder.id); // Return the fully updated order
     });
   });
 
@@ -201,10 +267,6 @@ function setupOrderHandlers() {
         include: {
           items: {
             where: { status: 'ACTIVE' },
-            include: {
-              selectedModifiers: { include: { modifierOption: true } },
-              discount: true
-            }
           }
         }
       });
@@ -212,12 +274,14 @@ function setupOrderHandlers() {
       if (!orderToVoid || (orderToVoid.status !== 'PAID' && orderToVoid.status !== 'VOIDED')) {
         throw new Error('Order is not in a voidable state.');
       }
-
-      let totalValueToVoid = 0;
+      
+      // The amount to refund is the *current* totalAmount,
+      // as this represents what the customer paid.
+      const totalValueToVoid = orderToVoid.totalAmount;
       const now = new Date();
 
+      // Void all *active* items
       for (const item of orderToVoid.items) {
-        totalValueToVoid += calculateOrderItemValue(item);
         await tx.orderItem.update({
           where: { id: item.id },
           data: {
@@ -227,21 +291,17 @@ function setupOrderHandlers() {
           }
         });
       }
-
-      // --- START: THIS IS THE FIX ---
-      // We remove `voidedAt` and `voidType` from this update call,
-      // as they do not exist on the Order model.
+      
       const finalOrder = await tx.order.update({
         where: { id: orderId },
         data: {
           status: 'VOIDED',
-          totalAmount: { decrement: totalValueToVoid },
-          refundAmount: { increment: totalValueToVoid },
+          totalAmount: 0, // The order total is now 0
+          refundAmount: { increment: totalValueToVoid }, // Refund what was paid
         }
       });
-      // --- END: THIS IS THE FIX ---
 
-      return getUpdatedOrder(tx, finalOrder.id);
+      return getUpdatedOrder(tx, finalOrder.id); // Re-fetch to be safe
     });
   });
 
@@ -256,9 +316,11 @@ function setupOrderHandlers() {
           selectedModifiers: {
             orderBy: { displayOrder: 'asc' },
             include: { modifierOption: true }
-          }
+          },
+          discount: true, // <-- Include item discount
         }
-      }
+      },
+      discount: true, // <-- Include order discount
     }
   }));
 
@@ -280,9 +342,11 @@ function setupOrderHandlers() {
                 selectedModifiers: {
                     orderBy: { displayOrder: 'asc' },
                     include: { modifierOption: true }
-                }
+                },
+                discount: true, // <-- Include item discount
             }
-        }
+        },
+        discount: true, // <-- Include order discount
       }
     });
   });
@@ -297,40 +361,29 @@ function setupOrderHandlers() {
     
     const duration = differenceInMilliseconds(end, start);
     
-    const prevStart = subMilliseconds(start, duration);
-    const prevEnd = subMilliseconds(end, duration);
+    // --- FIX: Ensure previous period doesn't overlap ---
+    const prevStart = subMilliseconds(start, duration + 1);
+    const prevEnd = subMilliseconds(start, 1);
+    // --- END FIX ---
 
     return getStatsForPeriod(prevStart, prevEnd);
   });
 
   ipcMain.handle('get-daily-sales-for-range', async (e, { startDate, endDate }) => {
-    const paidOrders = await prisma.order.findMany({
+    const orders = await prisma.order.findMany({
       where: {
-        status: 'PAID',
+        status: { in: ['PAID', 'VOIDED'] }, // Must include voided to get accurate revenue
         createdAt: {
           gte: new Date(startDate),
           lte: new Date(endDate),
         },
       },
-       include: {
-        items: {
-          include: {
-            selectedModifiers: { include: { modifierOption: true } },
-            discount: true,
-          },
-        },
-      },
     });
-
-    const salesByDay = paidOrders.reduce((acc, order) => {
+  
+    const salesByDay = orders.reduce((acc, order) => {
       const day = formatISO(order.createdAt, { representation: 'date' });
-      const validTotal = order.items.reduce((sum, item) => {
-          if (item.status !== 'VOIDED') {
-              return sum + calculateOrderItemValue(item);
-          }
-          return sum;
-      }, 0);
-      acc[day] = (acc[day] || 0) + validTotal;
+      // order.totalAmount reflects the final amount (post-voids, etc.)
+      acc[day] = (acc[day] || 0) + order.totalAmount;
       return acc;
     }, {});
 
@@ -350,7 +403,7 @@ function setupOrderHandlers() {
       }
       const newOrder = await tx.order.create({
         data: orderData,
-        include: { table: true, items: { include: { product: true, selectedModifiers: true } } }
+        include: { table: true, items: { include: { product: true, selectedModifiers: true, discount: true } }, discount: true }
       });
       return getUpdatedOrder(tx, newOrder.id);
     });
@@ -362,13 +415,15 @@ function setupOrderHandlers() {
       where: { tableId: tableId, status: 'OPEN' },
       include: {
         table: true,
+        discount: true,
         items: {
           include: {
             product: true,
             selectedModifiers: {
               orderBy: { displayOrder: 'asc' },
               include: { modifierOption: true }
-            }
+            },
+            discount: true,
           }
         }
       }
@@ -382,7 +437,7 @@ function setupOrderHandlers() {
       if (!product) throw new Error('Product not found.');
       const priceAtTimeOfOrder = product.price;
       const existingItems = await tx.orderItem.findMany({
-        where: { orderId, productId, discountId: null, status: 'ACTIVE' }, // Only stack active items
+        where: { orderId, productId, discountId: null, status: 'ACTIVE', comment: null }, // Only stack active, non-discounted, non-commented items
         include: { selectedModifiers: { orderBy: { displayOrder: 'asc' } } },
       });
       const matchingItem = existingItems.find(item => {
@@ -452,7 +507,8 @@ function setupOrderHandlers() {
       const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
       const updatedOrderForTotal = await getUpdatedOrder(tx, orderId);
 
-      if (Math.abs(totalPaid - updatedOrderForTotal.totalAmount) > 0.001) {
+      // Use a small tolerance for floating point comparison
+      if (Math.abs(totalPaid - updatedOrderForTotal.totalAmount) > 0.01) {
         throw new Error(`Total paid (${totalPaid.toFixed(2)}) does not match order total (${updatedOrderForTotal.totalAmount.toFixed(2)}).`);
       }
 
@@ -477,6 +533,8 @@ function setupOrderHandlers() {
         data: {
           status: 'PAID',
           paymentMethod: paymentMethodsString,
+          // Set totalAmount one last time to the exact paid amount to avoid float issues
+          totalAmount: totalPaid
         },
       });
     });
@@ -513,6 +571,8 @@ function setupOrderHandlers() {
       if (!heldOrder || heldOrder.status !== 'HOLD') {
         throw new Error('Order is not a valid held order and cannot be deleted.');
       }
+      // Must delete related payments first if they exist (though they shouldn't for 'HOLD')
+      await tx.payment.deleteMany({ where: { orderId: orderId }});
       await tx.orderItem.deleteMany({ where: { orderId: orderId } });
       await tx.order.delete({ where: { id: orderId } });
       return { success: true };
@@ -527,6 +587,7 @@ function setupOrderHandlers() {
       if (orderToClear.tableId) {
         await tx.table.update({ where: { id: orderToClear.tableId }, data: { status: 'AVAILABLE' } });
       }
+      await tx.payment.deleteMany({ where: { orderId: orderId }}); // Clear any stray payments
       await tx.orderItem.deleteMany({ where: { orderId: orderId } });
       await tx.order.delete({ where: { id: orderId } });
       return { success: true };
@@ -553,8 +614,10 @@ function setupOrderHandlers() {
     });
   });
 
+  // --- MODIFIED: This function is no longer used, but we leave it ---
   ipcMain.handle('apply-discount-to-item', async (e, { orderId, orderItemId, discountId }) => {
     return prisma.$transaction(async (tx) => {
+      // Applying an item discount should remove an order-level discount
       await tx.order.update({ where: { id: orderId }, data: { discountId: null } });
 
       await tx.orderItem.update({
@@ -567,6 +630,7 @@ function setupOrderHandlers() {
 
   ipcMain.handle('apply-discount-to-order', async (e, { orderId, discountId }) => {
     return prisma.$transaction(async (tx) => {
+      // Applying an order discount should remove all item-level discounts
       await tx.orderItem.updateMany({
         where: { orderId: orderId },
         data: { discountId: null },

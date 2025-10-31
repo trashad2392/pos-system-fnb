@@ -26,6 +26,7 @@ function setupDiscountHandlers() {
         name: data.name,
         type: data.type,
         value: parseFloat(data.value) || 0,
+        minimumOrderAmount: parseFloat(data.minimumOrderAmount) || 0, // <-- ADDED THIS LINE
         isActive: data.isActive !== undefined ? data.isActive : true,
     };
 
@@ -54,6 +55,7 @@ function setupDiscountHandlers() {
         updateData.type = data.type;
      }
      if (data.value !== undefined) updateData.value = parseFloat(data.value) || 0;
+     if (data.minimumOrderAmount !== undefined) updateData.minimumOrderAmount = parseFloat(data.minimumOrderAmount) || 0; // <-- ADDED THIS LINE
      if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
      if (Object.keys(updateData).length === 0) {

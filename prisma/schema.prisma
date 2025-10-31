@@ -36,16 +36,19 @@ model Role {
   permissions Permission[] @relation("RoleToPermission")
 }
 
+// --- MODIFIED: Discount Model ---
 model Discount {
-  id         Int         @id @default(autoincrement())
-  name       String      @unique
-  type       String // "PERCENT" or "FIXED"
-  value      Float
-  isActive   Boolean     @default(true)
-  createdAt  DateTime    @default(now())
-  orderItems OrderItem[]
-  orders     Order[]
+  id                 Int         @id @default(autoincrement())
+  name               String      @unique
+  type               String // "PERCENT" or "FIXED"
+  value              Float
+  minimumOrderAmount Float?      @default(0) // <-- THIS WAS THE ADDITION
+  isActive           Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  orderItems         OrderItem[]
+  orders             Order[]
 }
+// --- END MODIFICATION ---
 
 // --- MODIFIED: Category Model ---
 model Category {

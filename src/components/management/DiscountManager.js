@@ -14,6 +14,7 @@ const initialDiscountState = {
   name: '',
   type: 'PERCENT',
   value: 0,
+  minimumOrderAmount: 0, // <-- ADDED THIS LINE
   isActive: true,
 };
 
@@ -22,6 +23,7 @@ export default function DiscountManager({ discounts, onDataChanged }) {
   const [editingDiscount, setEditingDiscount] = useState(initialDiscountState);
 
   const handleOpenModal = (discount = null) => {
+    // <-- MODIFIED: Ensure minimumOrderAmount is set
     setEditingDiscount(discount ? { ...discount } : initialDiscountState);
     open();
   };
@@ -32,8 +34,9 @@ export default function DiscountManager({ discounts, onDataChanged }) {
   };
 
   const handleSaveDiscount = async () => {
-    if (!editingDiscount.name || !editingDiscount.value) {
-      notifications.show({ title: 'Error', message: 'Name and Value are required.', color: 'red' });
+    // <-- MODIFIED: Relaxed check for value (can be 0)
+    if (!editingDiscount.name) {
+      notifications.show({ title: 'Error', message: 'Name is required.', color: 'red' });
       return;
     }
 
@@ -42,6 +45,7 @@ export default function DiscountManager({ discounts, onDataChanged }) {
         name: editingDiscount.name,
         type: editingDiscount.type,
         value: parseFloat(editingDiscount.value) || 0,
+        minimumOrderAmount: parseFloat(editingDiscount.minimumOrderAmount) || 0, // <-- ADDED THIS LINE
         isActive: editingDiscount.isActive,
       };
 
@@ -92,6 +96,7 @@ export default function DiscountManager({ discounts, onDataChanged }) {
           data={[{ value: 'PERCENT', label: 'Percentage (%)' }, { value: 'FIXED', label: 'Fixed Amount ($)' }]}
           value={editingDiscount.type}
           onChange={(value) => setEditingDiscount({ ...editingDiscount, type: value })}
+          allowDeselect={false} // <-- BUG FIX: Add this line
         />
         <NumberInput
           mt="md"
@@ -101,8 +106,19 @@ export default function DiscountManager({ discounts, onDataChanged }) {
           min={0}
           required
           value={editingDiscount.value || 0}
-          onChange={(value) => setEditingDiscount({ ...editingDiscount, value })}
+          onChange={(value) => setEditingDiscount({ ...editingDiscount, value: value === undefined ? 0 : value })}
         />
+        {/* --- START: ADDED NEW FIELD --- */}
+        <NumberInput
+          mt="md"
+          label="Minimum Order Amount (Optional)"
+          description="The order subtotal must be this amount or higher for the discount to apply. (0 = no minimum)"
+          precision={2}
+          min={0}
+          value={editingDiscount.minimumOrderAmount || 0}
+          onChange={(value) => setEditingDiscount({ ...editingDiscount, minimumOrderAmount: value === undefined ? 0 : value })}
+        />
+        {/* --- END: ADDED NEW FIELD --- */}
         <Switch
           mt="lg"
           label="Discount is active"
@@ -129,17 +145,26 @@ export default function DiscountManager({ discounts, onDataChanged }) {
               <Table.Th>Name</Table.Th>
               <Table.Th>Type</Table.Th>
               <Table.Th>Value</Table.Th>
+              <Table.Th>Min. Order</Table.Th> {/* <-- ADDED THIS COLUMN */}
               <Table.Th>Status</Table.Th>
               <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
-          <Table.Tbody>
-            {discounts.length > 0 ? (
+          {/* --- START: WHITESPACE FIX --- */}
+          <Table.Tbody>{
+            discounts.length > 0 ? (
               discounts.map((discount) => (
                 <Table.Tr key={discount.id}>
                   <Table.Td>{discount.name}</Table.Td>
                   <Table.Td>{discount.type}</Table.Td>
                   <Table.Td>{discount.type === 'PERCENT' ? `${discount.value}%` : `$${discount.value.toFixed(2)}`}</Table.Td>
+                  {/* --- START: ADDED NEW CELL --- */}
+                  <Table.Td>
+                    {discount.minimumOrderAmount > 0
+                      ? `$${discount.minimumOrderAmount.toFixed(2)}`
+                      : 'N/A'}
+                  </Table.Td>
+                  {/* --- END: ADDED NEW CELL --- */}
                   <Table.Td>
                     <Text c={discount.isActive ? 'green' : 'red'}>{discount.isActive ? 'Active' : 'Inactive'}</Text>
                   </Table.Td>
@@ -159,12 +184,14 @@ export default function DiscountManager({ discounts, onDataChanged }) {
               ))
             ) : (
               <Table.Tr>
-                <Table.Td colSpan={5}>
+                {/* <-- MODIFIED: colSpan to 6 --> */}
+                <Table.Td colSpan={6}>
                   <Text ta="center">No discounts have been created yet.</Text>
                 </Table.Td>
               </Table.Tr>
-            )}
-          </Table.Tbody>
+            )
+          }</Table.Tbody>
+          {/* --- END: WHITESPACE FIX --- */}
         </Table>
       </Paper>
     </>
