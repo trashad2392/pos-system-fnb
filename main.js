@@ -1,49 +1,58 @@
 // main.js
-const { app, BrowserWindow, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const serve = require('electron-serve');
 const { setupAllIpcHandlers } = require('./src/main/handlers');
+const serve = require('electron-serve');
 
-const serveURL = serve({ directory: path.join(__dirname, 'out') });
 const isDev = !app.isPackaged;
+const loadURL = serve({ directory: 'out' });
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 1200, height: 800,
-    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+let mainWindow;
+
+function createMainWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: isDev ? false : true // Disable web security in dev to allow http://localhost
+    },
   });
 
+  // Open DevTools in dev mode
   if (isDev) {
-    win.loadURL('http://localhost:3000');
-    win.webContents.openDevTools();
-  } else {
-    serveURL(win);
+    mainWindow.webContents.openDevTools();
   }
+
+  // Load the Next.js app
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:3000');
+  } else {
+    loadURL(mainWindow);
+  }
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
-app.whenReady().then(() => {
-  protocol.registerFileProtocol('safe-file', (request, callback) => {
-    const url = request.url.replace(/^safe-file:\/\//, '');
-    try {
-      return callback(decodeURIComponent(url));
-    } catch (error) {
-      console.error('Failed to decode URL', url, error);
-      return callback({ error: -6 });
-    }
-  });
-
-  setupAllIpcHandlers();
-  createWindow();
-});
-
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+app.on('ready', () => {
+  createMainWindow();
+  // --- THIS IS THE CHANGE ---
+  // We pass __dirname (the project root) to the handlers
+  setupAllIpcHandlers(__dirname);
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('activate', () => {
+  if (mainWindow === null) {
+    createMainWindow();
   }
 });

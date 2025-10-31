@@ -2,7 +2,7 @@
 "use client";
 
 import { Table, Text, Box, Button, Badge, Group } from '@mantine/core';
-import { IconBan } from '@tabler/icons-react';
+import { IconBan, IconPrinter } from '@tabler/icons-react'; // <-- IMPORTED IconPrinter
 import { useAuth } from '@/context/AuthContext'; // <-- Import useAuth
 
 const ClientDateTime = ({ date }) => {
@@ -13,6 +13,18 @@ const ClientDateTime = ({ date }) => {
 export default function SalesTable({ sales, onOpenVoidModal }) {
   const { hasPermission } = useAuth(); // <-- Use our permission hook
   const canVoid = hasPermission('orders:void'); // <-- Check permission once
+  
+  // --- ADDED THIS FUNCTION ---
+  // We can just assume if a user can see this table, they can print.
+  const handlePrint = async (orderId) => {
+    try {
+      await window.api.printReceipt(orderId);
+    } catch (error) {
+      console.error("Failed to print receipt:", error);
+      // You could show a notification here if you want
+    }
+  };
+  
   const displayedSales = [...sales].reverse();
 
   return (
@@ -36,7 +48,7 @@ export default function SalesTable({ sales, onOpenVoidModal }) {
             const isFullyVoided = sale.status === 'VOIDED';
 
             return (
-              <Table.Tr key={sale.id} style={isFullyVoided ? { backgroundColor: 'var(--mantine-color-red-0)' } : {}}>
+              <Table.Tr key={sale.id} style={isFullyVoided ? { backgroundColor: 'var(--mantant-color-red-0)' } : {}}>
                 <Table.Td>{index + 1}</Table.Td>
                 <Table.Td>
                   <ClientDateTime date={sale.createdAt} />
@@ -76,17 +88,32 @@ export default function SalesTable({ sales, onOpenVoidModal }) {
                 {/* Conditionally render the cell with the button */}
                 {canVoid && (
                   <Table.Td>
-                    {sale.status === 'PAID' && (
+                    {/* --- START: MODIFIED GROUP --- */}
+                    <Group gap="xs">
+                      {/* --- ADDED THIS BUTTON --- */}
                       <Button
                         size="xs"
-                        color="red"
+                        color="blue"
                         variant="outline"
-                        onClick={() => onOpenVoidModal(sale.id)}
-                        leftSection={<IconBan size={14} />}
+                        onClick={() => handlePrint(sale.id)}
+                        leftSection={<IconPrinter size={14} />}
                       >
-                        Void / Edit
+                        Print
                       </Button>
-                    )}
+                      
+                      {sale.status === 'PAID' && (
+                        <Button
+                          size="xs"
+                          color="red"
+                          variant="outline"
+                          onClick={() => onOpenVoidModal(sale.id)}
+                          leftSection={<IconBan size={14} />}
+                        >
+                          Void / Edit
+                        </Button>
+                      )}
+                    </Group>
+                    {/* --- END: MODIFIED GROUP --- */}
                   </Table.Td>
                 )}
               </Table.Tr>

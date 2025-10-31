@@ -95,4 +95,16 @@ contextBridge.exposeInMainWorld('api', {
   getPosSetting: (key) => ipcRenderer.invoke('get-pos-setting', key),
   setPosSetting: (data) => ipcRenderer.invoke('set-pos-setting', data), // Expects { key, value }
   setPosSettings: (settingsMap) => ipcRenderer.invoke('set-pos-settings', settingsMap), // Expects { key1: value1, ... }
+
+  // --- START: MODIFIED PRINTING FUNCTIONS ---
+  printReceipt: (orderId) => ipcRenderer.invoke('print-receipt', orderId),
+  triggerPrintDialog: () => ipcRenderer.send('trigger-print-dialog'),
+  
+  // This is the new function to "pull" the data
+  getReceiptData: () => ipcRenderer.invoke('get-receipt-data'),
+  
+  // These are no longer used by page.js, but we'll leave them for now
+  onReceiptData: (callback) => ipcRenderer.on('receipt-data', (e, ...args) => callback(...args)),
+  clearReceiptDataListener: () => ipcRenderer.removeAllListeners('receipt-data'),
+  // --- END: MODIFIED PRINTING FUNCTIONS ---
 });

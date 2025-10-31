@@ -10,9 +10,12 @@ const { setupDiscountHandlers } = require('./discountHandlers');
 const { setupFileHandlers } = require('./fileHandlers');
 const { setupRoleHandlers } = require('./roleHandlers');
 const { setupMenuHandlers } = require('./menuHandlers');
-const { setupSettingHandlers } = require('./settingHandlers'); // <-- ADD THIS LINE
+const { setupSettingHandlers } = require('./settingHandlers');
+const { setupPrintingHandlers } = require('./printingHandlers');
 
-function setupAllIpcHandlers() {
+// --- THIS IS THE CHANGE ---
+// It now accepts 'rootDir'
+function setupAllIpcHandlers(rootDir) {
   setupCategoryHandlers();
   setupProductHandlers();
   setupModifierHandlers();
@@ -24,7 +27,10 @@ function setupAllIpcHandlers() {
   setupFileHandlers();
   setupRoleHandlers();
   setupMenuHandlers();
-  setupSettingHandlers(); // <-- ADD THIS LINE
+  setupSettingHandlers();
+  // --- THIS IS THE CHANGE ---
+  // We pass the correct rootDir to the printing handler
+  setupPrintingHandlers(rootDir);
 }
 
 module.exports = { setupAllIpcHandlers };

@@ -1,6 +1,7 @@
 // src/app/layout.js
 "use client";
 
+import { usePathname } from 'next/navigation'; // <-- IMPORT usePathname
 import { MantineProvider, ColorSchemeScript } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { AuthProvider } from '../context/AuthContext'; 
@@ -11,6 +12,11 @@ import './globals.css';
 
 
 export default function RootLayout({ children }) {
+  // --- START: ADDED CONDITIONAL LOGIC ---
+  const pathname = usePathname();
+  const isPrintRoute = pathname === '/print/receipt/';
+  // --- END: ADDED CONDITIONAL LOGIC ---
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -18,17 +24,22 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <MantineProvider>
-          {/* --- START OF CHANGE --- */}
-          {/* You can change the autoClose value to any number in milliseconds. */}
-          {/* For example, 6000 is 6 seconds. */}
-          <Notifications position="top-right" autoClose={1500} />
-          {/* --- END OF CHANGE --- */}
-          
-          <AuthProvider>
-            <AppContent>
-              {children}
-            </AppContent>
-          </AuthProvider>
+          {/* --- START: MODIFIED CONTENT --- */}
+          {isPrintRoute ? (
+            // If it's the print route, render *only* the children (the receipt page)
+            children
+          ) : (
+            // Otherwise, render the full app with auth and navigation
+            <>
+              <Notifications position="top-right" autoClose={1500} />
+              <AuthProvider>
+                <AppContent>
+                  {children}
+                </AppContent>
+              </AuthProvider>
+            </>
+          )}
+          {/* --- END: MODIFIED CONTENT --- */}
         </MantineProvider>
       </body>
     </html>

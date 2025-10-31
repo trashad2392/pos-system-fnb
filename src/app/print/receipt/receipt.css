@@ -1,0 +1,83 @@
+/* src/app/print/receipt/receipt.css */
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f9f9f9;
+  /* Simulate a paper width */
+  width: 380px; 
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.receipt-container {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  color: #000;
+  background-color: #fff;
+  padding: 15px;
+  width: 380px;
+  box-sizing: border-box;
+}
+
+.receipt-container * {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #000;
+}
+
+.item-name, .modifier-name {
+  /* Allow text to wrap if it's too long */
+  white-space: normal;
+  word-break: break-word;
+  flex: 1;
+}
+
+.item-price, .modifier-price {
+  /* Keep prices from wrapping */
+  white-space: nowrap;
+  padding-left: 10px;
+}
+
+.modifiers-list {
+  padding-left: 10px;
+  margin-bottom: 5px;
+}
+
+.modifier-name {
+  font-size: 13px;
+  color: #333;
+}
+
+.modifier-price {
+  font-size: 13px;
+}
+
+/* --- ADDED THIS BLOCK --- */
+.voided-item * {
+  text-decoration: line-through;
+  color: #555 !important;
+}
+/* --- END ADDED BLOCK --- */
+
+
+/* Print-specific styles */
+@media print {
+  body {
+    background-color: #fff;
+    width: 100%; /* Use full width of paper */
+    margin: 0;
+    padding: 0;
+  }
+  
+  .receipt-container {
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+  }
+  
+  /* Hide scrollbars during print */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+}

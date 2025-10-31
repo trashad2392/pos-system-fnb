@@ -171,7 +171,7 @@ export function usePosLogic() {
     modalActions.closePaymentModal();
   }, [modalActions, activeOrder]);
 
-  // --- Finalize order, checks reconfirm flag for splits ---
+  // --- START: MODIFIED finalizeOrder ---
   const handleFinalizeOrder = useCallback(async () => {
     if (!activeOrder || !selectedPaymentMethods) {
         notifications.show({ title: 'Warning', message: 'Please select payment method via Exceptions.', color: 'yellow' });
@@ -199,8 +199,17 @@ export function usePosLogic() {
     const orderType = activeOrder.orderType;
     const orderIdToFinalize = activeOrder.id;
     try {
-      await window.api.finalizeOrder({ orderId: orderIdToFinalize, payments: finalPayments });
+      // Capture the finalized order object returned from the API
+      const finalizedOrder = await window.api.finalizeOrder({ orderId: orderIdToFinalize, payments: finalPayments });
       notifications.show({ title: 'Success', message: 'Order finalized!', color: 'green' });
+
+      // --- ADDED PRINT CALL ---
+      if (finalizedOrder) {
+        console.log(`[usePosLogic] Order finalized, triggering print for ID: ${finalizedOrder.id}`);
+        await window.api.printReceipt(finalizedOrder.id);
+      }
+      // --- END PRINT CALL ---
+
       clearActiveOrder();
       if (orderType === 'Dine-In') await handleGoHome(); else await startOrder(orderType);
     } catch (err) {
@@ -213,9 +222,10 @@ export function usePosLogic() {
        }
     }
   }, [activeOrder, selectedPaymentMethods, paymentSelectionType, splitPaymentRequiresReconfirm, modalActions, clearActiveOrder, handleGoHome, startOrder]);
+  // --- END: MODIFIED finalizeOrder ---
 
 
-  // --- Fast Cash directly finalizes with Cash ---
+  // --- START: MODIFIED handleFastCash ---
   const handleFastCash = useCallback(async () => {
      if (!activeOrder || !activeOrder.items || activeOrder.items.length === 0) return;
     if (activeOrder.totalAmount < 0.001) {
@@ -226,8 +236,17 @@ export function usePosLogic() {
     const orderType = activeOrder.orderType;
     const orderIdToFinalize = activeOrder.id;
     try {
-        await window.api.finalizeOrder({ orderId: orderIdToFinalize, payments: cashPayment });
+        // Capture the finalized order object returned from the API
+        const finalizedOrder = await window.api.finalizeOrder({ orderId: orderIdToFinalize, payments: cashPayment });
         notifications.show({ title: 'Success', message: 'Order paid in cash!', color: 'green' });
+
+        // --- ADDED PRINT CALL ---
+        if (finalizedOrder) {
+          console.log(`[usePosLogic] Fast Cash finalized, triggering print for ID: ${finalizedOrder.id}`);
+          await window.api.printReceipt(finalizedOrder.id);
+        }
+        // --- END PRINT CALL ---
+
         clearActiveOrder();
         if (orderType === 'Dine-In') await handleGoHome(); else await startOrder(orderType);
     } catch (err) {
@@ -235,6 +254,7 @@ export function usePosLogic() {
         notifications.show({ title: 'Error', message: `Fast cash failed: ${err.message}`, color: 'red' });
     }
   }, [activeOrder, clearActiveOrder, handleGoHome, startOrder]);
+  // --- END: MODIFIED handleFastCash ---
 
 
   // --- HOLD ORDER ---
