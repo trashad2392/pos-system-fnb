@@ -68,12 +68,14 @@ export default function PosPage() {
     <div>
       {renderView()}
 
+      {/* --- START: THIS IS THE FIX --- */}
       <ModifierModal
         product={customizingProduct}
         opened={modifierModalOpened}
-        onClose={actions.closeModifierModal} // Use specific close action
+        onClose={actions.handleCloseModifierModal} // <-- Renamed from closeModifierModal
         onConfirm={actions.handleConfirmModifiers}
       />
+      {/* --- END: THIS IS THE FIX --- */}
 
       <PaymentModal
         order={activeOrder}

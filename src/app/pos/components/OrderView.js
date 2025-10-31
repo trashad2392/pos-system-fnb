@@ -83,7 +83,23 @@ export default function OrderView({
   };
 
   const subtotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
-  const discountAmount = order ? subtotal - (order.totalAmount || 0) : 0;
+  // --- MODIFIED: Ensure minimumOrderAmount is checked ---
+  // We calculate this just for display, the backend does the real check
+  let discountAmount = 0;
+  if (order?.discount) {
+    const minAmount = order.discount.minimumOrderAmount || 0;
+    if (subtotal >= minAmount) {
+      if (order.discount.type === 'PERCENT') {
+        discountAmount = subtotal * (order.discount.value / 100);
+      } else { // FIXED
+        discountAmount = order.discount.value;
+      }
+      // Ensure discount doesn't exceed subtotal
+      discountAmount = Math.min(subtotal, discountAmount);
+    }
+  }
+  // --- END MODIFICATION ---
+
 
   const formatPaymentMethods = (methods) => {
      // ... (remains the same)
@@ -146,6 +162,7 @@ export default function OrderView({
                {!isCartEmpty ? (
                   order.items.map(item => {
                     const itemTotal = calculateItemTotal(item);
+                    // --- This logic is fine, as item.discount is separate ---
                     let discountedItemTotal = itemTotal;
                     if (item.discount) {
                       if (item.discount.type === 'PERCENT') {
@@ -237,6 +254,13 @@ export default function OrderView({
                  </Group>
                </>
              )}
+             {/* --- MODIFIED: Show minimum warning if discount exists but isn't applied --- */}
+             {order?.discount && discountAmount < 0.001 && order.discount.minimumOrderAmount > 0 && (
+                <Text size="sm" c="red" ta="right">
+                    Subtotal of ${subtotal.toFixed(2)} does not meet ${order.discount.name} minimum of ${order.discount.minimumOrderAmount.toFixed(2)}.
+                </Text>
+             )}
+             {/* --- END MODIFICATION --- */}
              <Group justify="space-between">
                <Title order={3}>Total:</Title>
                <Title order={3}>${Number(order?.totalAmount || 0).toFixed(2)}</Title>
@@ -281,7 +305,7 @@ export default function OrderView({
 
       {/* ===== Menu Panel ===== */}
       <Grid.Col span={7}>
-         {/* ... (Menu panel remains the same) ... */}
+         {/* ... (Menu panel header remains the same) ... */}
          <Group justify="space-between" mb="md">
             <Title order={2} style={{ flexGrow: 1, marginRight: '10px' }}>
                 {order?.table ? `Order for ${order.table.name}` : `${order?.orderType || 'New'} Order`}
@@ -299,6 +323,7 @@ export default function OrderView({
                   <Tabs.Panel key={cat.id} value={cat.id.toString()} pt="xs">
                   <ScrollArea style={{ height: 'calc(75vh + 20px)' }}>
                       <Grid>
+                      {/* --- START: VISUAL PRODUCT GRID --- */}
                       {(products || []).filter(p => p.categoryId === cat.id).map(product => (
                           <Grid.Col span={{ base: 6, sm: 4, md: 3 }} key={product.id}>
                             <UnstyledButton
@@ -319,11 +344,15 @@ export default function OrderView({
                                   <Text size="sm" wrap="wrap" ta="center" lh={1.2} mt={4} style={{ height: '40px' }}>
                                     {product.name}
                                   </Text>
+                                  <Text size="sm" fw={500} c="dimmed">
+                                    ${product.price.toFixed(2)}
+                                  </Text>
                                 </Stack>
                               </Paper>
                             </UnstyledButton>
                           </Grid.Col>
                       ))}
+                      {/* --- END: VISUAL PRODUCT GRID --- */}
                       </Grid>
                   </ScrollArea>
                   </Tabs.Panel>
