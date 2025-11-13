@@ -8,7 +8,8 @@ import ProductManager from '@/components/management/ProductManager';
 import ModifierManager from '@/components/management/ModifierManager';
 import TableManager from '@/components/management/TableManager';
 import DiscountManager from '@/components/management/DiscountManager';
-import MenuManager from '@/components/management/MenuManager'; // <-- Import MenuManager
+import MenuManager from '@/components/management/MenuManager';
+import MenuSettingsManager from '@/components/management/MenuSettingsManager'; // <-- Import MenuSettingsManager
 
 export default function InventoryPage() {
   const { hasPermission } = useAuth();
@@ -16,9 +17,12 @@ export default function InventoryPage() {
   // Determine which sections the user can access
   const canManageInventory = hasPermission('inventory:manage');
   const canManageDiscounts = hasPermission('discounts:manage');
+  // --- NEW: Check POS Settings permission ---
+  const canManagePosSettings = hasPermission('settings:manage_pos');
+  // --- END NEW ---
 
   // If the user has access to neither section, then deny access to the whole page.
-  if (!canManageInventory && !canManageDiscounts) {
+  if (!canManageInventory && !canManageDiscounts && !canManagePosSettings) { // <-- UPDATED CHECK
     return (
       <Center style={{ height: '50vh' }}>
         <Text c="red" fw={500}>You do not have permission to view this page.</Text>
@@ -91,19 +95,22 @@ export default function InventoryPage() {
   };
 
   // Determine which tab should be active by default
-  const defaultTab = canManageInventory ? 'menus' : 'discounts'; // <-- Default to menus if allowed
-
+  const defaultTab = canManagePosSettings ? 'pos_settings' : (canManageInventory ? 'menus' : 'discounts');
+  
   return (
     <div>
       <Group justify="space-between" mb="xl">
-        <Title order={1}>Inventory & Menu Management</Title>
+        <Title order={1}>Menu Management</Title> {/* <-- CHANGED PAGE TITLE */}
         {canManageInventory && <Button onClick={handleImportMenu} variant="outline">Import Menu</Button>}
       </Group>
 
       <Tabs defaultValue={defaultTab}>
         <Tabs.List>
+          {/* --- NEW: POS Settings Tab (moved from Settings) --- */}
+          {canManagePosSettings && <Tabs.Tab value="pos_settings">POS Settings</Tabs.Tab>}
+          {/* --- END NEW --- */}
           {/* Conditionally render each tab */}
-          {canManageInventory && <Tabs.Tab value="menus">Menus</Tabs.Tab>} {/* <-- Add Menus tab */}
+          {canManageInventory && <Tabs.Tab value="menus">Menus</Tabs.Tab>}
           {canManageInventory && <Tabs.Tab value="categories">Categories</Tabs.Tab>}
           {canManageInventory && <Tabs.Tab value="products">Products</Tabs.Tab>}
           {canManageInventory && <Tabs.Tab value="modifiers">Modifiers</Tabs.Tab>}
@@ -111,7 +118,14 @@ export default function InventoryPage() {
           {canManageDiscounts && <Tabs.Tab value="discounts">Discounts</Tabs.Tab>}
         </Tabs.List>
 
-        {/* --- Add Menus Panel --- */}
+        {/* --- NEW: POS Settings Panel (moved from Settings) --- */}
+        {canManagePosSettings && (
+          <Tabs.Panel value="pos_settings" pt="md">
+            <MenuSettingsManager />
+          </Tabs.Panel>
+        )}
+        {/* --- End NEW --- */}
+
         {canManageInventory && (
           <Tabs.Panel value="menus" pt="xs">
             <MenuManager menus={menus} onDataChanged={fetchData} />

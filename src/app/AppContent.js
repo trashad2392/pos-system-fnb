@@ -26,11 +26,11 @@ export default function AppContent({ children }) {
   
   const navLinks = [
     { href: "/pos", label: "Point of Sale", requiredPermission: "pos:access" },
-    // --- UPDATED: Show Inventory link if user has EITHER permission ---
+    // --- UPDATED: Change href to /menu ---
     { 
-      href: "/inventory", 
-      label: "Inventory", 
-      requiredPermission: () => hasPermission('inventory:manage') || hasPermission('discounts:manage')
+      href: "/menu", // <-- CHANGED ROUTE
+      label: "Menu Management",
+      requiredPermission: () => hasPermission('inventory:manage') || hasPermission('discounts:manage') || hasPermission('settings:manage_pos')
     },
     { href: "/sales", label: "Sales", requiredPermission: "sales:view_reports" },
     { 

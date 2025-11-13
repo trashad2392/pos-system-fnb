@@ -68,26 +68,24 @@ export default function PosPage() {
     <div>
       {renderView()}
 
-      {/* --- START: THIS IS THE FIX --- */}
       <ModifierModal
         product={customizingProduct}
         opened={modifierModalOpened}
-        onClose={actions.handleCloseModifierModal} // <-- Renamed from closeModifierModal
+        onClose={actions.handleCloseModifierModal}
         onConfirm={actions.handleConfirmModifiers}
       />
-      {/* --- END: THIS IS THE FIX --- */}
 
       <PaymentModal
         order={activeOrder}
         opened={paymentModalOpened}
-        onClose={actions.closePaymentModal} // Use specific close action
+        onClose={actions.closePaymentModal} // This one is named correctly
         onSelectPayment={actions.handleSelectPayment}
         initialTab={paymentModalInitialTab} // <-- Pass initial tab prop
       />
 
       <HeldOrdersModal
         opened={heldOrdersModalOpened}
-        onClose={actions.closeHeldOrdersModal} // Use specific close action
+        onClose={actions.closeHeldOrdersModal} // This one is named correctly
         heldOrders={heldOrders}
         onResume={actions.handleResumeHeldOrder}
         onDelete={actions.handleDeleteHeldOrder}
@@ -96,7 +94,7 @@ export default function PosPage() {
 
       <CommentModal
         opened={commentModalOpened}
-        onClose={actions.closeCommentModal} // Use specific close action
+        onClose={actions.handleCloseCommentModal} // <-- FIXED
         onSave={actions.handleSaveComment}
         target={commentTarget}
         keyboardVisible={keyboardVisible}
@@ -105,7 +103,7 @@ export default function PosPage() {
 
       <DiscountModal
         opened={discountModalOpened}
-        onClose={actions.closeDiscountModal} // Use specific close action
+        onClose={actions.handleCloseDiscountModal} // <-- FIXED
         onSelectDiscount={actions.handleSelectDiscount}
         target={discountTarget}
         discounts={discounts}

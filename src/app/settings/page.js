@@ -6,7 +6,7 @@ import { Title, Text, Center, Tabs, Loader } from '@mantine/core'; // Added Load
 import { useAuth } from '@/context/AuthContext';
 import UserManager from '@/components/management/UserManager';
 import RoleManager from '@/components/management/RoleManager';
-import MenuSettingsManager from '@/components/management/MenuSettingsManager'; // <-- Import MenuSettingsManager
+// import MenuSettingsManager from '@/components/management/MenuSettingsManager'; // <-- REMOVED IMPORT
 
 // Define a new permission key for POS settings management
 const POS_SETTINGS_PERMISSION = 'settings:manage_pos';
@@ -20,7 +20,7 @@ export default function SettingsPage() {
   // Determine permissions once
   const canManageUsers = hasPermission('settings:manage_users');
   const canManageRoles = hasPermission('settings:manage_roles');
-  const canManagePosSettings = hasPermission(POS_SETTINGS_PERMISSION); // <-- Check new permission
+  const canManagePosSettings = hasPermission(POS_SETTINGS_PERMISSION); // Still check, but moving the component
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -48,10 +48,10 @@ export default function SettingsPage() {
   // Refetch data if permissions change (though unlikely without reload)
   useEffect(() => {
     fetchData();
-  }, [canManageUsers, canManageRoles, canManagePosSettings]); // Include all relevant permissions
+  }, [canManageUsers, canManageRoles, canManagePosSettings]);
 
-  // If user has none of the required permissions, deny access.
-  if (!canManageUsers && !canManageRoles && !canManagePosSettings) {
+  // If user has none of the required permissions for *this* page, deny access.
+  if (!canManageUsers && !canManageRoles) {
     return (
       <Center style={{ height: '50vh' }}>
         <Text c="red" fw={500}>You do not have permission to view this page.</Text>
@@ -67,29 +67,20 @@ export default function SettingsPage() {
     );
    }
 
-  // Determine the default tab based on permissions (prioritize POS Settings if available)
-  const defaultTab = canManagePosSettings ? 'pos_settings'
-                   : canManageUsers ? 'users'
-                   : 'roles';
+  // Determine the default tab based on permissions
+  const defaultTab = canManageUsers ? 'users' : 'roles';
 
   return (
     <div>
       <Title order={1} mb="xl">Settings</Title>
       <Tabs defaultValue={defaultTab}>
         <Tabs.List>
-          {/* Conditionally render tabs based on permissions */}
-          {canManagePosSettings && <Tabs.Tab value="pos_settings">POS Settings</Tabs.Tab>} {/* <-- Add POS Settings tab */}
+          {/* Removed POS Settings Tab */}
           {canManageUsers && <Tabs.Tab value="users">Manage Staff</Tabs.Tab>}
           {canManageRoles && <Tabs.Tab value="roles">Manage Roles</Tabs.Tab>}
         </Tabs.List>
 
-        {/* --- Add POS Settings Panel --- */}
-        {canManagePosSettings && (
-          <Tabs.Panel value="pos_settings" pt="md">
-            <MenuSettingsManager /> {/* No props needed for now */}
-          </Tabs.Panel>
-        )}
-        {/* --- End Add POS Settings Panel --- */}
+        {/* Removed POS Settings Panel */}
 
         {canManageUsers && (
           <Tabs.Panel value="users" pt="md">
