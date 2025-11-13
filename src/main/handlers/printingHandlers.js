@@ -93,8 +93,15 @@ function setupPrintingHandlers(rootDir) {
           nodeIntegration: false,
           contextIsolation: true,
         },
+        resizable: false, // <-- Prevents resizing/maximization
+        maximizable: false, // <-- Prevents manual maximization
+        autoHideMenuBar: true, 
+        modal: true, // Makes it a child window that sits on top
       });
 
+      // Center the new window over the screen
+      printWindow.center();
+      
       const printURL = getPrintURL();
       console.log(`[PrintingHandler] Loading URL: ${printURL}`);
       printWindow.loadURL(printURL);
@@ -143,7 +150,6 @@ function setupPrintingHandlers(rootDir) {
           console.error('Failed to print:', failureReason);
         }
         
-        // --- START: MODIFICATION ---
         // The window will no longer close automatically.
         // You can close it manually for development.
         /*
@@ -153,7 +159,6 @@ function setupPrintingHandlers(rootDir) {
            }
         }, 250);
         */
-        // --- END: MODIFICATION ---
       });
     }
   });

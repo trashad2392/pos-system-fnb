@@ -11,7 +11,8 @@ let mainWindow;
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
+    // Keep defaults, but rely on maximize: true
+    width: 1200, 
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -19,6 +20,16 @@ function createMainWindow() {
       contextIsolation: true,
       webSecurity: isDev ? false : true // Disable web security in dev to allow http://localhost
     },
+    // --- START OF FIX (Refined) ---
+    show: false, // Don't show until ready
+    maximize: true, // Start maximized
+    autoHideMenuBar: true, // Cleaner maximized view
+    // --- END OF FIX (Refined) ---
+  });
+  
+  // Show the window only after it's ready to prevent flicker
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
   });
 
   // Open DevTools in dev mode
@@ -40,7 +51,6 @@ function createMainWindow() {
 
 app.on('ready', () => {
   createMainWindow();
-  // --- THIS IS THE CHANGE ---
   // We pass __dirname (the project root) to the handlers
   setupAllIpcHandlers(__dirname);
 });

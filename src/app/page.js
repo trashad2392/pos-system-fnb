@@ -21,7 +21,7 @@ export default function RootRedirectPage() {
       if (user.role === 'Cashier') {
         router.replace('/pos');
       } else { // Manager or Admin
-        router.replace('/inventory');
+        router.replace('/menu'); // <-- FIXED: Redirecting to the new path
       }
     }
     // If there is no user, the AppContent component will handle showing the LoginScreen,

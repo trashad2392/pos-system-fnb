@@ -1,7 +1,7 @@
 // src/app/print/receipt/page.js
 "use client";
 
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, Fragment, useRef } from 'react'; // <-- ADDED useRef
 import { Box, Text, Title, Group, Divider, Center, Loader } from '@mantine/core';
 import './receipt.css'; 
 
@@ -19,6 +19,7 @@ function ClientDateTime({ date }) {
 export default function ReceiptPage() {
   const [order, setOrder] = useState(null);
   const [error, setError] = useState(null);
+  const printInitiatedRef = useRef(false); // <-- CHANGED to useRef
 
   useEffect(() => {
     // --- START: MODIFIED LOGIC (PULL DATA) ---
@@ -43,12 +44,18 @@ export default function ReceiptPage() {
           // Wait a brief moment for React to render the new state
           // Then, tell the main process to open the print dialog
           setTimeout(() => {
-            if (window.api && typeof window.api.triggerPrintDialog === 'function') {
+            // --- UPDATED GUARD LOGIC ---
+            // We check the mutable ref value and set it immediately if we proceed.
+            if (!printInitiatedRef.current && window.api && typeof window.api.triggerPrintDialog === 'function') { 
               console.log("Triggering print dialog...");
               window.api.triggerPrintDialog();
+              printInitiatedRef.current = true; // <-- Set flag on ref
+            } else if (printInitiatedRef.current) {
+                 console.log("Print already initiated. Skipping.");
             } else {
               console.error("window.api.triggerPrintDialog is not available.");
             }
+            // --- END UPDATED GUARD LOGIC ---
           }, 250); // 250ms delay to ensure DOM is updated
         } else {
           console.error("Received null or undefined data from getReceiptData.");
