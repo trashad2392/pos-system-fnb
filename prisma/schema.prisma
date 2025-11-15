@@ -11,6 +11,29 @@ datasource db {
   url      = "file:./pos_v2.db"
 }
 
+// --- NEW: Customer Models for Credit Sale ---
+model Company {
+  id           Int        @id @default(autoincrement())
+  name         String     @unique
+  creditLimit  Float      @default(0) // Max debt allowed
+  isActive     Boolean    @default(true)
+  customers    Customer[]
+}
+
+model Customer {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  balance     Float    @default(0) // Positive: advance payment. Negative: debt.
+  creditLimit Float    @default(0) // Max debt allowed (overrides company limit if lower)
+  isActive    Boolean  @default(true)
+  companyId   Int?
+  company     Company? @relation(fields: [companyId], references: [id])
+  orders      Order[]  // Orders charged to this customer
+  payments    Payment[] // Payments made to reduce debt
+}
+// --- END NEW CUSTOMER MODELS ---
+
+
 // --- NEW: Menu Model ---
 model Menu {
   id         Int        @id @default(autoincrement())
@@ -63,30 +86,30 @@ model Category {
 }
 
 model Product {
-  id             Int                    @id @default(autoincrement())
-  name           String
-  sku            String                 @unique
-  price          Float
-  image          String?
-  description    String?
-  isArchived     Boolean                @default(false)
-  categoryId     Int
-  category       Category               @relation(fields: [categoryId], references: [id])
-  modifierGroups ProductModifierGroup[]
-  orderItems     OrderItem[]
+  id               Int                    @id @default(autoincrement())
+  name             String
+  sku              String                 @unique
+  price            Float
+  image            String?
+  description      String?
+  isArchived       Boolean                @default(false)
+  categoryId       Int
+  category         Category               @relation(fields: [categoryId], references: [id])
+  modifierGroups   ProductModifierGroup[]
+  orderItems       OrderItem[]
 }
 
 model ModifierGroup {
-  id                             Int              @id @default(autoincrement())
-  name                           String
-  minSelection                   Int              @default(0)
-  selectionBudget                Int              @default(1)
-  maxSelections                  Int?
+  id                               Int              @id @default(autoincrement())
+  name                             String
+  minSelection                     Int              @default(0)
+  selectionBudget                  Int              @default(1)
+  maxSelections                    Int?
   maxSelectionsSyncedToOptionCount Boolean          @default(false)
-  allowRepeatedSelections        Boolean          @default(false)
-  exactBudgetRequired            Boolean          @default(false)
-  options                        ModifierOption[]
-  products                       ProductModifierGroup[]
+  allowRepeatedSelections          Boolean          @default(false)
+  exactBudgetRequired              Boolean          @default(false)
+  options                          ModifierOption[]
+  products                         ProductModifierGroup[]
 }
 
 model ProductModifierGroup {
@@ -117,6 +140,7 @@ model Table {
   orders Order[]
 }
 
+// --- MODIFIED: Order Model ---
 model Order {
   id            Int         @id @default(autoincrement())
   status        String      @default("OPEN") // "OPEN", "PAID", "HOLD", "CLEARED", "VOIDED"
@@ -134,8 +158,13 @@ model Order {
   payments      Payment[]
   discountId    Int?
   discount      Discount?   @relation(fields: [discountId], references: [id])
+  // --- ADDED FIELDS ---
+  customerId    Int?
+  customer      Customer?   @relation(fields: [customerId], references: [id])
+  // --- END ADDED FIELDS ---
 }
 
+// --- MODIFIED: Payment Model ---
 model Payment {
   id        Int      @id @default(autoincrement())
   amount    Float
@@ -143,6 +172,10 @@ model Payment {
   createdAt DateTime @default(now())
   orderId   Int
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // --- ADDED FIELD ---
+  customerId Int? // For payments made to reduce an account balance, not necessarily tied to an order
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  // --- END ADDED FIELD ---
 }
 
 model OrderItem {
@@ -157,7 +190,7 @@ model OrderItem {
   comment            String?
   status             String              @default("ACTIVE") // "ACTIVE" or "VOIDED"
   voidedAt           DateTime?
-  voidType           String?             // "SHORT" or "LONG"
+  voidType           String? // "SHORT" or "LONG"
   discountId         Int?
   discount           Discount?           @relation(fields: [discountId], references: [id])
 }

@@ -39,7 +39,8 @@ function createMainWindow() {
 
   // Load the Next.js app
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000');
+    // --- CRITICAL FIX: Changed port from 3000 to 3001 to match package.json ---
+    mainWindow.loadURL('http://localhost:3001');
   } else {
     loadURL(mainWindow);
   }

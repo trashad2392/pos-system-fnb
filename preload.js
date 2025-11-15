@@ -90,11 +90,22 @@ contextBridge.exposeInMainWorld('api', {
   updateMenu: (data) => ipcRenderer.invoke('update-menu', data),
   deleteMenu: (id) => ipcRenderer.invoke('delete-menu', id),
 
-  // --- NEW: Setting Functions ---
+  // Setting Functions
   getPosSettings: () => ipcRenderer.invoke('get-pos-settings'),
   getPosSetting: (key) => ipcRenderer.invoke('get-pos-setting', key),
   setPosSetting: (data) => ipcRenderer.invoke('set-pos-setting', data), // Expects { key, value }
   setPosSettings: (settingsMap) => ipcRenderer.invoke('set-pos-settings', settingsMap), // Expects { key1: value1, ... }
+
+  // --- NEW: Customer & Company Functions (Credit Sale) ---
+  getCompanies: () => ipcRenderer.invoke('get-companies'),
+  addCompany: (data) => ipcRenderer.invoke('add-company', data),
+  updateCompany: (data) => ipcRenderer.invoke('update-company', data),
+  getCustomers: () => ipcRenderer.invoke('get-customers'),
+  addCustomer: (data) => ipcRenderer.invoke('add-customer', data),
+  updateCustomer: (data) => ipcRenderer.invoke('update-customer', data),
+  addCustomerPayment: (data) => ipcRenderer.invoke('add-customer-payment', data), // { customerId, amount, method }
+  getCustomerCreditStatus: (customerId) => ipcRenderer.invoke('get-customer-credit-status', customerId),
+  // --- END NEW ---
 
   // --- START: MODIFIED PRINTING FUNCTIONS ---
   printReceipt: (orderId) => ipcRenderer.invoke('print-receipt', orderId),

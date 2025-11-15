@@ -49,6 +49,10 @@ export function usePosLogic() {
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState(null);
   const [paymentSelectionType, setPaymentSelectionType] = useState(null);
   const [splitPaymentRequiresReconfirm, setSplitPaymentRequiresReconfirm] = useState(false);
+  // --- RESTORED STATE: Store the selected customerId for credit sales ---
+  const [creditSaleCustomerId, setCreditSaleCustomerId] = useState(null);
+  // --- END RESTORED STATE ---
+
 
   const {
     heldOrders, actions: heldOrderActions
@@ -64,6 +68,7 @@ export function usePosLogic() {
         setSelectedPaymentMethods(null);
         setPaymentSelectionType(null);
         setSplitPaymentRequiresReconfirm(false);
+        setCreditSaleCustomerId(null); // <-- CLEAR CUSTOMER ID
     }
   }, [activeOrder?.id, previousOrderId]);
 
@@ -152,8 +157,8 @@ export function usePosLogic() {
     }
   }, [resumeOrder, startOrder]);
 
-  // --- Function to handle payment selection, now accepts type ---
-  const handleSelectPayment = useCallback((payments, type) => {
+  // --- Function to handle payment selection, now accepts type and optional customerId ---
+  const handleSelectPayment = useCallback((payments, type, customerId = null) => {
      if (!activeOrder) {
          console.error("[usePosLogic] Cannot select payment: No active order.");
          return;
@@ -164,17 +169,19 @@ export function usePosLogic() {
         notifications.show({ title: 'Amount Mismatch', message: 'Order total may have changed. Please verify amounts.', color: 'yellow', autoClose: 5000 });
      }
 
-    console.log("[usePosLogic] Payment method selected:", payments, "Type:", type);
+    console.log("[usePosLogic] Payment method selected:", payments, "Type:", type, "Customer ID:", customerId);
     setSelectedPaymentMethods(payments);
     setPaymentSelectionType(type);
     setSplitPaymentRequiresReconfirm(false);
+    setCreditSaleCustomerId(customerId); // <-- SET CUSTOMER ID
     modalActions.closePaymentModal();
   }, [modalActions, activeOrder]);
 
   // --- START: MODIFIED finalizeOrder ---
   const handleFinalizeOrder = useCallback(async () => {
     if (!activeOrder || !selectedPaymentMethods) {
-        notifications.show({ title: 'Warning', message: 'Please select payment method via Exceptions.', color: 'yellow' });
+        // --- UPDATED WARNING MESSAGE ---
+        notifications.show({ title: 'Warning', message: 'Please select payment method via Other payments.', color: 'yellow' });
         return;
     }
     if (paymentSelectionType === 'split' && splitPaymentRequiresReconfirm) {
@@ -182,46 +189,73 @@ export function usePosLogic() {
         modalActions.openPaymentModal({ initialTab: 'split' });
         return;
     }
-    let finalPayments = [...selectedPaymentMethods];
-    let finalTotalCheckAmount = finalPayments.reduce((sum, p) => sum + p.amount, 0);
+    
+    // --- Determine Final Payment Data ---
+    const isCreditSale = paymentSelectionType === 'credit';
+    const customerIdToCharge = isCreditSale ? creditSaleCustomerId : null;
+    let finalPayments = isCreditSale ? selectedPaymentMethods : [...selectedPaymentMethods];
+    
+    // Recalculate full payment for floating point safety
     if (paymentSelectionType === 'full' && finalPayments.length === 1) {
         finalPayments[0].amount = activeOrder.totalAmount;
-        finalTotalCheckAmount = activeOrder.totalAmount;
     }
+    
+    const finalTotalCheckAmount = finalPayments.reduce((sum, p) => sum + p.amount, 0);
      if (Math.abs(finalTotalCheckAmount - activeOrder.totalAmount) > 0.015) {
         console.error(`[usePosLogic] Finalization Mismatch: Payment total (${finalTotalCheckAmount.toFixed(2)}) vs Order total (${activeOrder.totalAmount.toFixed(2)}).`);
         notifications.show({ title: 'Error: Amount Mismatch', message: 'Order total changed unexpectedly. Please re-select payment method.', color: 'red', autoClose: 7000 });
         setSelectedPaymentMethods(null);
         setPaymentSelectionType(null);
         setSplitPaymentRequiresReconfirm(false);
+        setCreditSaleCustomerId(null);
         return;
      }
+    // --- End Determine Final Payment Data ---
+
     const orderType = activeOrder.orderType;
     const orderIdToFinalize = activeOrder.id;
     try {
       // Capture the finalized order object returned from the API
-      const finalizedOrder = await window.api.finalizeOrder({ orderId: orderIdToFinalize, payments: finalPayments });
-      notifications.show({ title: 'Success', message: 'Order finalized!', color: 'green' });
-
-      // --- ADDED PRINT CALL ---
-      if (finalizedOrder) {
+      const finalizedOrder = await window.api.finalizeOrder({ 
+        orderId: orderIdToFinalize, 
+        payments: finalPayments, 
+        customerId: customerIdToCharge 
+      });
+      
+      // 1. UPDATED: Print must happen BEFORE state reset and after successful finalization
+      if (finalizedOrder) { 
         console.log(`[usePosLogic] Order finalized, triggering print for ID: ${finalizedOrder.id}`);
         await window.api.printReceipt(finalizedOrder.id);
       }
-      // --- END PRINT CALL ---
 
+      // 2. Show Success
+      notifications.show({ title: 'Success', message: isCreditSale ? 'Order Charged to Account.' : 'Order finalized!', color: 'green' });
+
+      // 3. Reset State
       clearActiveOrder();
       if (orderType === 'Dine-In') await handleGoHome(); else await startOrder(orderType);
+      
     } catch (err) {
       console.error("[usePosLogic] Failed to finalize order:", err);
-      notifications.show({ title: 'Error', message: `Failed to finalize order: ${err.message}`, color: 'red' });
-       if (err.message.includes("does not match order total")) {
+      
+      // --- FIXED: Extract the clean error message and display it ---
+      // This extracts the specific message thrown by the backend (e.g., Credit limit exceeded)
+      const friendlyMessage = err.message.replace('Error invoking remote method "finalize-order": Error: ', '');
+      notifications.show({ 
+          title: 'Transaction Failed', 
+          message: friendlyMessage, 
+          color: 'red' 
+      });
+      
+      // Reset payment selection if a credit or amount validation error occurred
+      if (friendlyMessage.includes("Credit limit exceeded") || friendlyMessage.includes("does not match order total")) {
             setSelectedPaymentMethods(null);
             setPaymentSelectionType(null);
             setSplitPaymentRequiresReconfirm(false);
+            setCreditSaleCustomerId(null);
        }
     }
-  }, [activeOrder, selectedPaymentMethods, paymentSelectionType, splitPaymentRequiresReconfirm, modalActions, clearActiveOrder, handleGoHome, startOrder]);
+  }, [activeOrder, selectedPaymentMethods, paymentSelectionType, splitPaymentRequiresReconfirm, creditSaleCustomerId, modalActions, clearActiveOrder, handleGoHome, startOrder]);
   // --- END: MODIFIED finalizeOrder ---
 
 
@@ -237,7 +271,7 @@ export function usePosLogic() {
     const orderIdToFinalize = activeOrder.id;
     try {
         // Capture the finalized order object returned from the API
-        const finalizedOrder = await window.api.finalizeOrder({ orderId: orderIdToFinalize, payments: cashPayment });
+        const finalizedOrder = await window.api.finalizeOrder({ orderId: orderIdToFinalize, payments: cashPayment, customerId: null });
         notifications.show({ title: 'Success', message: 'Order paid in cash!', color: 'green' });
 
         // --- ADDED PRINT CALL ---
@@ -315,6 +349,8 @@ export function usePosLogic() {
     selectedPaymentMethods,
     paymentSelectionType,
     splitPaymentRequiresReconfirm,
+    // --- EXPOSE CUSTOMER ID STATE ---
+    creditSaleCustomerId,
 
     // Modal States
     modifierModalOpened, paymentModalOpened, heldOrdersModalOpened, commentModalOpened, discountModalOpened, keyboardVisible,

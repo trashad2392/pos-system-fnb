@@ -12,8 +12,9 @@ const permissions = [
   { name: 'settings:manage_roles', description: 'Can create/edit roles and their permissions' },
   { name: 'discounts:apply', description: 'Can apply discounts to orders and items' },
   { name: 'discounts:manage', description: 'Can create and edit discounts' },
-  // --- ADDED THIS LINE ---
   { name: 'settings:manage_pos', description: 'Can assign menus to POS order types' },
+  // --- ADDED THIS LINE ---
+  { name: 'customers:manage', description: 'Can manage customer accounts and company credit' },
 ];
 
 async function main() {
@@ -24,7 +25,11 @@ async function main() {
   await prisma.user.deleteMany({});
   await prisma.role.deleteMany({});
   await prisma.permission.deleteMany({});
-  console.log('Cleared existing users, roles, and permissions.');
+  // --- NEW: Clear customer data too ---
+  await prisma.customer.deleteMany({});
+  await prisma.company.deleteMany({});
+  // --- END NEW ---
+  console.log('Cleared existing users, roles, permissions, customers, and companies.');
 
   // --- Create all permissions ---
   for (const p of permissions) {

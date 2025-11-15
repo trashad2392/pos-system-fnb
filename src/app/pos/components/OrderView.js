@@ -295,7 +295,7 @@ export default function OrderView({
               </Grid.Col>
               <Grid.Col span={6}>
                 <Button size="lg" fullWidth disabled={isCartEmpty} onClick={openPaymentModal} variant='light'>
-                    Exceptions
+                    Other Payments
                 </Button>
               </Grid.Col>
             </Grid>

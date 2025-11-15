@@ -1,9 +1,9 @@
 // src/app/pos/components/PaymentModal.js
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import { Modal, Title, Text, Button, Group, Divider, Grid, Box, Tabs, Stack, UnstyledButton, Paper } from '@mantine/core';
-import { IconCash, IconCreditCard, IconGiftCard, IconBuildingBank, IconDeviceFloppy, IconWallet, IconCheck } from '@tabler/icons-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Modal, Title, Text, Button, Group, Divider, Grid, Box, Tabs, Stack, UnstyledButton, Paper, ScrollArea, Select } from '@mantine/core';
+import { IconCash, IconCreditCard, IconWallet, IconBuildingBank, IconCheck, IconBuilding, IconUser } from '@tabler/icons-react';
 import Keypad from './Keypad';
 import { notifications } from '@mantine/notifications';
 
@@ -16,11 +16,23 @@ const paymentMethods = [
 
 const payInFullMethods = paymentMethods.filter(p => p.name !== 'Cash');
 
+function formatCurrency(amount) {
+    return `$${Number(amount).toFixed(2)}`;
+}
+
 export default function PaymentModal({ opened, onClose, order, onSelectPayment, initialTab = 'full' }) {
   const [splitAmounts, setSplitAmounts] = useState({});
   const [activeTab, setActiveTab] = useState(initialTab);
   const [activeSplitMethod, setActiveSplitMethod] = useState('Card');
   const [keypadInput, setKeypadInput] = useState('');
+  
+  // --- NEW STATE FOR CREDIT SALE ---
+  const [companies, setCompanies] = useState([]);
+  const [individualCustomers, setIndividualCustomers] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [customerCreditStatus, setCustomerCreditStatus] = useState(null);
+  // --- END NEW STATE ---
 
   const totalAmount = useMemo(() => order?.totalAmount || 0, [order?.totalAmount]);
 
@@ -29,8 +41,58 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
     const totalPaid = Object.values(splitAmounts).reduce((sum, amount) => sum + (amount || 0), 0);
     return parseFloat((totalAmount - totalPaid).toFixed(2));
   }, [splitAmounts, totalAmount]);
+  
+  // --- NEW: Filtered Customers for Credit Sale Tab ---
+  const filteredCreditCustomers = useMemo(() => {
+    if (!companies.length) return [];
+    
+    // Check if the selected ID points to an actual company
+    const selectedCompany = companies.find(c => c.id === Number(selectedCompanyId));
+    
+    // If no company selected or the selected company is the 'No Company' pseudo-group, show individuals
+    if (!selectedCompanyId || selectedCompanyId === '') {
+        return individualCustomers;
+    }
 
-  // Reset state
+    // If a company is selected, show its associated customers
+    return selectedCompany?.customers || [];
+  }, [companies, individualCustomers, selectedCompanyId]);
+
+  const companyOptions = useMemo(() => [
+    { value: '', label: 'Individual Accounts' },
+    ...companies.map(c => ({
+      value: c.id.toString(),
+      label: c.name
+    }))
+  ], [companies]);
+  
+  // --- NEW: Effect to fetch Customer/Company data ---
+  const fetchCreditData = useCallback(async () => {
+    if (!opened) return;
+    try {
+      const companyData = await window.api.getCompanies();
+      const customerData = await window.api.getCustomers();
+      
+      setCompanies(companyData);
+      setIndividualCustomers(customerData.filter(c => c.companyId === null));
+      setSelectedCompanyId(''); // Default to individual accounts
+    } catch (error) {
+      notifications.show({ title: 'Error', message: 'Failed to load credit accounts.', color: 'red' });
+      console.error("Failed to load credit accounts:", error);
+    }
+  }, [opened]);
+
+  // --- NEW: Effect to fetch selected customer's credit status ---
+  useEffect(() => {
+    setCustomerCreditStatus(null);
+    if (selectedCustomerId) {
+      window.api.getCustomerCreditStatus(selectedCustomerId)
+        .then(setCustomerCreditStatus)
+        .catch(err => console.error("Failed to fetch credit status:", err));
+    }
+  }, [selectedCustomerId]);
+
+  // Reset state on modal open/close
   useEffect(() => {
     if (opened && order) {
       const initialAmounts = paymentMethods.reduce((acc, method) => {
@@ -43,8 +105,18 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
       const firstEditableMethod = paymentMethods.find(p => p.name !== 'Cash')?.name || paymentMethods[0].name;
       setActiveSplitMethod(initialTab === 'split' ? firstEditableMethod : 'Card');
       setKeypadInput('');
+      
+      // Reset Credit Sale state
+      setSelectedCustomerId(null);
+      setCustomerCreditStatus(null);
+      fetchCreditData();
+
+    } else if (!opened) {
+       // Clear payment selection state when modal closes
+        setSelectedCustomerId(null);
+        setCustomerCreditStatus(null);
     }
-  }, [opened, order, totalAmount, initialTab]);
+  }, [opened, order, totalAmount, initialTab, fetchCreditData]);
 
   // Link keypad
   useEffect(() => {
@@ -60,6 +132,21 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
     onSelectPayment([{ method, amount: totalAmount }], 'full');
   };
 
+  // --- NEW: Credit Sale Confirmation Handler ---
+  const handleCreditSaleConfirm = () => {
+    if (!selectedCustomerId) {
+        return notifications.show({ title: 'Error', message: 'Please select a customer account.', color: 'red' });
+    }
+    if (customerCreditStatus?.isOverdue) {
+        return notifications.show({ title: 'Error', message: 'Customer has exceeded their credit limit.', color: 'red' });
+    }
+
+    // The payment method is 'Credit' and the amount is the order total
+    const payments = [{ method: 'Credit', amount: totalAmount, customerId: selectedCustomerId }];
+    
+    onSelectPayment(payments, 'credit', selectedCustomerId);
+  };
+  
   const handleSplitAmountChange = (method, value) => {
     if (method === 'Cash') return;
     const newAmount = Math.max(0, value || 0);
@@ -90,12 +177,14 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
       .map(([method, amount]) => ({ method, amount: parseFloat(amount.toFixed(2)) }));
 
     if (payments.length > 0 && Math.abs(remainingAmount) < 0.01) {
-       if (Math.abs(remainingAmount) > 0.001 && payments.length > 0 && payments[payments.length - 1].method !== 'Cash') {
-          payments[payments.length - 1].amount = parseFloat((payments[payments.length - 1].amount + remainingAmount).toFixed(2));
-       } else if (Math.abs(remainingAmount) > 0.001 && payments.find(p => p.method === 'Cash')) {
+       // Auto-adjusting cash payment for floating point tolerance (already implemented in original file logic)
+       if (Math.abs(remainingAmount) > 0.001 && payments.length > 0) {
            const cashPaymentIndex = payments.findIndex(p => p.method === 'Cash');
            if (cashPaymentIndex !== -1) {
                 payments[cashPaymentIndex].amount = parseFloat((payments[cashPaymentIndex].amount + remainingAmount).toFixed(2));
+           } else {
+               // Adjust last non-cash payment if cash isn't involved (less ideal, but handles edge case)
+               payments[payments.length - 1].amount = parseFloat((payments[payments.length - 1].amount + remainingAmount).toFixed(2));
            }
        }
       const finalPayments = payments.filter(p => p.amount > 0.001);
@@ -125,7 +214,6 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
           <Text size="lg">Total Due:</Text>
           <Title order={1}>${totalAmount.toFixed(2)}</Title>
         </Box>
-        {/* --- REMOVED Remaining Amount Box --- */}
       </Group>
       <Divider my="md" />
 
@@ -133,8 +221,10 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
         <Tabs.List grow>
           <Tabs.Tab value="full">Pay in Full</Tabs.Tab>
           <Tabs.Tab value="split">Split Payment</Tabs.Tab>
+          <Tabs.Tab value="credit">Credit Sale</Tabs.Tab> {/* <-- NEW TAB */}
         </Tabs.List>
 
+        {/* --- Pay in Full Tab --- */}
         <Tabs.Panel value="full" pt="md">
           <Text ta="center" mb="md">Select a method to pay the full amount.</Text>
           <Grid>
@@ -148,6 +238,7 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
           </Grid>
         </Tabs.Panel>
 
+        {/* --- Split Payment Tab --- */}
         <Tabs.Panel value="split" pt="md">
             <Grid>
                 <Grid.Col span={6}>
@@ -169,20 +260,80 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
                 </Grid.Col>
             </Grid>
         </Tabs.Panel>
+        
+        {/* --- NEW: Credit Sale Tab --- */}
+        <Tabs.Panel value="credit" pt="md">
+            <Group grow mb="md">
+                <Select
+                    label="Select Company"
+                    placeholder="Individual Accounts"
+                    data={companyOptions}
+                    value={selectedCompanyId}
+                    onChange={setSelectedCompanyId}
+                    searchable
+                    clearable={false}
+                    leftSection={<IconBuilding size={16} />}
+                />
+            </Group>
+            
+            <Divider my="md" label="Select Customer" labelPosition="center" />
+
+            <ScrollArea style={{ height: '30vh' }} mb="md">
+                <Grid>
+                    {filteredCreditCustomers.map(customer => (
+                        <Grid.Col span={6} key={customer.id}>
+                            <UnstyledButton
+                                onClick={() => setSelectedCustomerId(customer.id)}
+                                style={{ width: '100%' }}
+                            >
+                                <Paper withBorder p="md" bg={selectedCustomerId === customer.id ? 'blue.0' : 'transparent'}>
+                                    <Group justify="space-between" wrap="nowrap">
+                                        <Text fw={500} lineClamp={1} pr="xs">
+                                            <IconUser size={16} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                            {customer.name}
+                                        </Text>
+                                        <Text size="sm" c="dimmed">{customer.company?.name || 'Individual'}</Text>
+                                    </Group>
+                                </Paper>
+                            </UnstyledButton>
+                        </Grid.Col>
+                    ))}
+                </Grid>
+            </ScrollArea>
+            
+            <Paper withBorder p="md">
+                <Title order={5} mb="xs">Credit Status</Title>
+                <Group justify="space-between">
+                    <Text>Current Balance:</Text>
+                    <Text fw={700} c={customerCreditStatus?.balance < 0 ? 'red' : 'green'}>
+                        {formatCurrency(customerCreditStatus?.balance ?? 0)}
+                    </Text>
+                </Group>
+                <Group justify="space-between">
+                    <Text>Available Credit:</Text>
+                    <Text fw={700} c={customerCreditStatus?.isOverdue ? 'red' : 'green'}>
+                        {formatCurrency(customerCreditStatus?.availableCredit ?? 0)}
+                    </Text>
+                </Group>
+            </Paper>
+
+        </Tabs.Panel>
       </Tabs>
 
-      {/* Confirm Button for Split */}
-      {activeTab === 'split' && (
+      {/* Confirm Button for Split / Credit */}
+      {(activeTab === 'split' || activeTab === 'credit') && (
           <>
               <Divider my="xl" />
               <Button
                   fullWidth size="xl" h={70}
-                  onClick={handleConfirmSplit}
-                  disabled={Math.abs(remainingAmount) > 0.01}
-                  color="blue"
+                  onClick={activeTab === 'credit' ? handleCreditSaleConfirm : handleConfirmSplit}
+                  disabled={activeTab === 'split' ? Math.abs(remainingAmount) > 0.01 : !selectedCustomerId || customerCreditStatus?.isOverdue}
+                  color={activeTab === 'credit' ? 'orange' : 'blue'}
                   leftSection={<IconCheck size={24} />}
               >
-                  <Title order={3}>Confirm Split</Title>
+                  <Title order={3}>
+                    {activeTab === 'credit' ? 'Charge to Account' : 'Confirm Split'}
+                  </Title>
               </Button>
           </>
       )}

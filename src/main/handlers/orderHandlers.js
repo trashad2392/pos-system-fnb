@@ -119,53 +119,11 @@ async function getStatsForPeriod(startDate, endDate) {
         }
     });
 
-    // --- MODIFICATION: Need to get subtotal *before* order discount
+    // --- SIMPLER LOGIC ---
+    // `getStatsForPeriod` should sum the `totalAmount` of 'PAID' orders
+    // `order.totalAmount` already reflects the final amount charged.
     const totalRevenue = paidOrders.reduce((sum, order) => {
-        // We can't just use order.totalAmount because that *includes* the discount.
-        // We must recalculate the subtotal of items that were not voided.
-        const orderSubtotal = order.items.reduce((itemSum, item) => {
-            if (item.status !== 'VOIDED') {
-                // calculateOrderItemValue already handles item-level discounts
-                return itemSum + calculateOrderItemValue(item);
-            }
-            return itemSum;
-        }, 0);
-        
-        // Now, we *would* apply the order-level discount *if* it was eligible
-        // But for "Total Revenue", we should use the final paid amount.
-        // Let's use order.totalAmount, but we must account for voids.
-        // A simpler way: totalRevenue is the sum of all *payments*.
-        
-        // Let's redefine totalRevenue based on order.totalAmount,
-        // but it must be recalculated based on voiding.
-        
-        // The current `calculateOrderItemValue` is correct for items.
-        // The `getUpdatedOrder` logic is what calculates the true total.
-        // `order.totalAmount` in the DB *should* be correct *after* voiding.
-        
-        // Let's trust the `order.totalAmount` for PAID orders,
-        // but we need to sum up the *remaining* value for VOIDED orders.
-        if (order.status === 'PAID') {
-           return sum + order.totalAmount;
-        }
-
-        // For VOIDED orders, sum up the value of items that are STILL ACTIVE
-        // (which should be 0, but this is safer)
-        const voidedOrderValue = order.items.reduce((itemSum, item) => {
-             if (item.status === 'ACTIVE') { // Should not happen if order is VOIDED, but good practice
-                return itemSum + calculateOrderItemValue(item);
-             }
-             return itemSum;
-        }, 0);
-        // We also need to add back any refundAmount to get the original sale value
-        // This is getting complex.
-        
-        // --- SIMPLER LOGIC ---
-        // `getStatsForPeriod` should sum the `totalAmount` of 'PAID' orders
-        // and add the `totalAmount` (post-void) of 'VOIDED' orders.
-        // `totalAmount` already reflects the final amount charged.
         return sum + order.totalAmount;
-
     }, 0);
 
     const totalSales = paidOrders.length;
@@ -393,7 +351,6 @@ function setupOrderHandlers() {
     })).sort((a, b) => new Date(a.date) - new Date(b.date));
   });
 
-  // ... (the rest of the file from create-order downwards remains unchanged)
   ipcMain.handle('create-order', async (e, { tableId, orderType }) => {
     return prisma.$transaction(async (tx) => {
       const orderData = { status: 'OPEN', orderType: orderType, totalAmount: 0 };
@@ -494,50 +451,93 @@ function setupOrderHandlers() {
     });
   });
 
-  ipcMain.handle('finalize-order', async (e, { orderId, payments }) => {
-    return prisma.$transaction(async (tx) => {
-      const orderToFinalize = await tx.order.findUnique({
-        where: { id: orderId },
-        include: { items: true },
-      });
+  // --- MODIFIED: Finalize Order to handle Credit Sales and prevent crash ---
+  ipcMain.handle('finalize-order', async (e, { orderId, payments, customerId = null }) => {
+    try {
+        return await prisma.$transaction(async (tx) => {
+            const orderToFinalize = await tx.order.findUnique({
+                where: { id: orderId },
+                include: { items: true },
+            });
 
-      if (!orderToFinalize) throw new Error('Order not found.');
-      if (orderToFinalize.status !== 'OPEN') throw new Error('This order is not open and cannot be finalized.');
+            if (!orderToFinalize) throw new Error('Order not found.');
+            if (orderToFinalize.status !== 'OPEN') throw new Error('This order is not open and cannot be finalized.');
 
-      const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-      const updatedOrderForTotal = await getUpdatedOrder(tx, orderId);
+            const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+            const updatedOrderForTotal = await getUpdatedOrder(tx, orderId);
+            const orderTotal = updatedOrderForTotal.totalAmount;
 
-      // Use a small tolerance for floating point comparison
-      if (Math.abs(totalPaid - updatedOrderForTotal.totalAmount) > 0.01) {
-        throw new Error(`Total paid (${totalPaid.toFixed(2)}) does not match order total (${updatedOrderForTotal.totalAmount.toFixed(2)}).`);
-      }
+            // Use a small tolerance for floating point comparison
+            if (Math.abs(totalPaid - orderTotal) > 0.01) {
+                throw new Error(`Total paid (${totalPaid.toFixed(2)}) does not match order total (${orderTotal.toFixed(2)}).`);
+            }
+            
+            const paymentMethodsString = payments.map(p => p.method).join(', ');
+            
+            // --- CREDIT SALE LOGIC ---
+            if (customerId !== null) {
+                const customer = await tx.customer.findUnique({ 
+                    where: { id: customerId }, 
+                    include: { company: true }
+                });
+                if (!customer) throw new Error('Customer for credit sale not found.');
+                
+                // Determine effective credit limit
+                const effectiveCreditLimit = customer.creditLimit > 0 
+                    ? customer.creditLimit 
+                    : (customer.company?.creditLimit || Infinity); // Use Infinity if no limit set
 
-      await tx.payment.createMany({
-        data: payments.map(p => ({
-          amount: p.amount,
-          method: p.method,
-          orderId: orderId,
-        })),
-      });
+                // Check if credit limit is exceeded (balance is negative for debt)
+                const newBalance = customer.balance - orderTotal;
+                if (effectiveCreditLimit !== Infinity && Math.abs(newBalance) > effectiveCreditLimit) {
+                    throw new Error(`Credit limit exceeded. Current debt would be $${Math.abs(newBalance).toFixed(2)}. Limit: $${effectiveCreditLimit.toFixed(2)}.`);
+                }
+                
+                // 1. Update Customer's debt balance
+                await tx.customer.update({
+                    where: { id: customerId },
+                    data: { balance: newBalance }, // Decrement balance (i.e., increase debt)
+                });
+                
+                // 2. We skip creating payment records for Credit Sale here,
+                //    as the single payment method is "Credit" and the transaction
+                //    is logged on the customer's balance.
+            } else {
+                // --- STANDARD PAYMENT LOGIC (Non-Credit Sale) ---
+                await tx.payment.createMany({
+                    data: payments.map(p => ({
+                        amount: p.amount,
+                        method: p.method,
+                        orderId: orderId,
+                    })),
+                });
+            }
+            // --- END CREDIT SALE LOGIC ---
 
-      if (orderToFinalize.tableId) {
-        await tx.table.update({
-          where: { id: orderToFinalize.tableId },
-          data: { status: 'AVAILABLE' },
+            if (orderToFinalize.tableId) {
+                await tx.table.update({
+                    where: { id: orderToFinalize.tableId },
+                    data: { status: 'AVAILABLE' },
+                });
+            }
+
+            return tx.order.update({
+                where: { id: orderId },
+                data: {
+                    status: 'PAID',
+                    paymentMethod: paymentMethodsString,
+                    totalAmount: orderTotal,
+                    customerId: customerId, // Set customer ID for credit sales
+                },
+            });
         });
-      }
-
-      const paymentMethodsString = payments.map(p => p.method).join(', ');
-      return tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: 'PAID',
-          paymentMethod: paymentMethodsString,
-          // Set totalAmount one last time to the exact paid amount to avoid float issues
-          totalAmount: totalPaid
-        },
-      });
-    });
+    } catch (error) {
+        // By using a top-level try-catch, we prevent Electron's main process from crashing 
+        // on intentional errors (like credit limit exceeded) or minor validation errors.
+        // We throw a new Error with the message, which Electron's IPC system will send 
+        // back to the renderer process (usePosLogic hook) to be handled gracefully.
+        throw new Error(error.message); 
+    }
   });
   
   ipcMain.handle('hold-order', async (e, { orderId }) => {
