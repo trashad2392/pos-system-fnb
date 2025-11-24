@@ -14,7 +14,7 @@ datasource db {
 // --- NEW: Customer Models for Credit Sale ---
 model Company {
   id           Int        @id @default(autoincrement())
-  name         String     @unique
+  name         String     @unique // MUST remain unique
   creditLimit  Float      @default(0) // Max debt allowed
   isActive     Boolean    @default(true)
   customers    Customer[]
@@ -22,7 +22,7 @@ model Company {
 
 model Customer {
   id          Int      @id @default(autoincrement())
-  name        String   @unique
+  name        String   // REMOVED @unique constraint here
   balance     Float    @default(0) // Positive: advance payment. Negative: debt.
   creditLimit Float    @default(0) // Max debt allowed (overrides company limit if lower)
   isActive    Boolean  @default(true)
@@ -65,7 +65,7 @@ model Discount {
   name               String      @unique
   type               String // "PERCENT" or "FIXED"
   value              Float
-  minimumOrderAmount Float?      @default(0) // <-- THIS WAS THE ADDITION
+  minimumOrderAmount Float?      @default(0) 
   isActive           Boolean     @default(true)
   createdAt          DateTime    @default(now())
   orderItems         OrderItem[]
@@ -164,14 +164,14 @@ model Order {
   // --- END ADDED FIELDS ---
 }
 
-// --- MODIFIED: Payment Model ---
+// --- MODIFIED: Payment Model - orderId is now OPTIONAL (Int?) ---
 model Payment {
   id        Int      @id @default(autoincrement())
   amount    Float
   method    String
   createdAt DateTime @default(now())
-  orderId   Int
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   Int? // <-- CHANGED TO OPTIONAL (Int?)
+  order     Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade) // Changed to optional (Order?)
   // --- ADDED FIELD ---
   customerId Int? // For payments made to reduce an account balance, not necessarily tied to an order
   customer   Customer? @relation(fields: [customerId], references: [id])

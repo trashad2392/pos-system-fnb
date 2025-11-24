@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Modal, Title, Text, Button, Group, Divider, Grid, Box, Tabs, Stack, UnstyledButton, Paper, ScrollArea, Select } from '@mantine/core';
+import { Modal, Title, Text, Button, Group, Divider, Grid, Box, Tabs, Stack, UnstyledButton, Paper, ScrollArea, Select, Badge } from '@mantine/core';
 import { IconCash, IconCreditCard, IconWallet, IconBuildingBank, IconCheck, IconBuilding, IconUser } from '@tabler/icons-react';
 import Keypad from './Keypad';
 import { notifications } from '@mantine/notifications';
@@ -26,37 +26,39 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
   const [activeSplitMethod, setActiveSplitMethod] = useState('Card');
   const [keypadInput, setKeypadInput] = useState('');
   
-  // --- NEW STATE FOR CREDIT SALE ---
+  // --- MODIFIED STATE FOR CREDIT SALE ---
   const [companies, setCompanies] = useState([]);
-  const [individualCustomers, setIndividualCustomers] = useState([]);
+  const [allCustomers, setAllCustomers] = useState([]); // All customers with their calculated status
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState(null);
-  const [customerCreditStatus, setCustomerCreditStatus] = useState(null);
-  // --- END NEW STATE ---
+  const [customerCreditStatus, setCustomerCreditStatus] = useState(null); // Status of the currently selected customer
+  // --- END MODIFIED STATE ---
 
   const totalAmount = useMemo(() => order?.totalAmount || 0, [order?.totalAmount]);
 
-  // Calculate remaining amount (still needed for disabling button)
+  // Calculate remaining amount
   const remainingAmount = useMemo(() => {
     const totalPaid = Object.values(splitAmounts).reduce((sum, amount) => sum + (amount || 0), 0);
     return parseFloat((totalAmount - totalPaid).toFixed(2));
   }, [splitAmounts, totalAmount]);
   
-  // --- NEW: Filtered Customers for Credit Sale Tab ---
+  // --- MODIFIED: Filtered Customers for Credit Sale Tab, now uses allCustomers ---
   const filteredCreditCustomers = useMemo(() => {
-    if (!companies.length) return [];
+    // 1. Filter out inactive customers (though getCustomers should only return active ones, this is safer)
+    const activeCustomers = allCustomers.filter(c => c.isActive); 
     
+    // 2. Filter by company
     // Check if the selected ID points to an actual company
     const selectedCompany = companies.find(c => c.id === Number(selectedCompanyId));
     
     // If no company selected or the selected company is the 'No Company' pseudo-group, show individuals
     if (!selectedCompanyId || selectedCompanyId === '') {
-        return individualCustomers;
+        return activeCustomers.filter(c => c.companyId === null);
     }
 
     // If a company is selected, show its associated customers
-    return selectedCompany?.customers || [];
-  }, [companies, individualCustomers, selectedCompanyId]);
+    return activeCustomers.filter(c => c.companyId === selectedCompany.id);
+  }, [companies, allCustomers, selectedCompanyId]);
 
   const companyOptions = useMemo(() => [
     { value: '', label: 'Individual Accounts' },
@@ -66,33 +68,61 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
     }))
   ], [companies]);
   
-  // --- NEW: Effect to fetch Customer/Company data ---
+  // --- MODIFIED: Effect to fetch Customer/Company data AND credit status ---
   const fetchCreditData = useCallback(async () => {
-    if (!opened) return;
+    if (!opened || !order) return;
     try {
+      const orderTotal = order.totalAmount;
       const companyData = await window.api.getCompanies();
-      const customerData = await window.api.getCustomers();
+      // Fetch only active customers
+      const rawCustomerData = await window.api.getCustomers();
+      
+      // 1. Fetch current credit status for all customers in parallel
+      const creditStatusPromises = rawCustomerData.map(c => 
+          window.api.getCustomerCreditStatus(c.id).then(status => {
+              // Calculate the theoretical new balance after charging the order
+              const theoreticalNewBalance = status.balance - orderTotal;
+
+              // --- FIX: Only flag 'willExceedLimit' if a limit is explicitly set (> 0) ---
+              const willExceed = status.creditLimit > 0 && 
+                               theoreticalNewBalance < 0 && 
+                               Math.abs(theoreticalNewBalance) > status.creditLimit;
+
+              return {
+                  ...c,
+                  creditStatus: status,
+                  willExceedLimit: willExceed, // Use the new, safer calculation
+              };
+          })
+      );
+      const customersWithStatus = await Promise.all(creditStatusPromises);
       
       setCompanies(companyData);
-      setIndividualCustomers(customerData.filter(c => c.companyId === null));
+      setAllCustomers(customersWithStatus);
       setSelectedCompanyId(''); // Default to individual accounts
     } catch (error) {
       notifications.show({ title: 'Error', message: 'Failed to load credit accounts.', color: 'red' });
       console.error("Failed to load credit accounts:", error);
     }
-  }, [opened]);
+  }, [opened, order]); // Added order dependency
 
-  // --- NEW: Effect to fetch selected customer's credit status ---
+  // --- MODIFIED: Effect to sync selected customer's credit status ---
   useEffect(() => {
-    setCustomerCreditStatus(null);
-    if (selectedCustomerId) {
-      window.api.getCustomerCreditStatus(selectedCustomerId)
-        .then(setCustomerCreditStatus)
-        .catch(err => console.error("Failed to fetch credit status:", err));
+    const selected = allCustomers.find(c => c.id === Number(selectedCustomerId));
+    if (selected) {
+        setCustomerCreditStatus({
+            ...selected.creditStatus,
+            willExceedLimit: selected.willExceedLimit, // Expose the pre-calculated flag
+            // Ensure availableCredit respects Infinity logic from backend for display
+            availableCredit: selected.creditStatus.availableCredit, 
+            creditLimit: selected.creditStatus.creditLimit
+        });
+    } else {
+        setCustomerCreditStatus(null);
     }
-  }, [selectedCustomerId]);
+  }, [selectedCustomerId, allCustomers]);
 
-  // Reset state on modal open/close
+  // Reset state on modal open/close (updated to use modified state names)
   useEffect(() => {
     if (opened && order) {
       const initialAmounts = paymentMethods.reduce((acc, method) => {
@@ -127,18 +157,22 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keypadInput]);
 
+
   // Handlers
   const handleSinglePaymentSelect = (method) => {
     onSelectPayment([{ method, amount: totalAmount }], 'full');
   };
 
-  // --- NEW: Credit Sale Confirmation Handler ---
+  // --- MODIFIED: Credit Sale Confirmation Handler to use calculated status ---
   const handleCreditSaleConfirm = () => {
     if (!selectedCustomerId) {
         return notifications.show({ title: 'Error', message: 'Please select a customer account.', color: 'red' });
     }
-    if (customerCreditStatus?.isOverdue) {
-        return notifications.show({ title: 'Error', message: 'Customer has exceeded their credit limit.', color: 'red' });
+    
+    const selectedCustomer = allCustomers.find(c => c.id === Number(selectedCustomerId));
+    // Check if the current selection would exceed the limit (which should disable the button)
+    if (selectedCustomer?.willExceedLimit) {
+        return notifications.show({ title: 'Error', message: 'Cannot charge: Transaction would exceed credit limit.', color: 'red' });
     }
 
     // The payment method is 'Credit' and the amount is the order total
@@ -221,10 +255,10 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
         <Tabs.List grow>
           <Tabs.Tab value="full">Pay in Full</Tabs.Tab>
           <Tabs.Tab value="split">Split Payment</Tabs.Tab>
-          <Tabs.Tab value="credit">Credit Sale</Tabs.Tab> {/* <-- NEW TAB */}
+          <Tabs.Tab value="credit">Credit Sale</Tabs.Tab>
         </Tabs.List>
 
-        {/* --- Pay in Full Tab --- */}
+        {/* --- Pay in Full Tab (Omitted for brevity) --- */}
         <Tabs.Panel value="full" pt="md">
           <Text ta="center" mb="md">Select a method to pay the full amount.</Text>
           <Grid>
@@ -238,7 +272,7 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
           </Grid>
         </Tabs.Panel>
 
-        {/* --- Split Payment Tab --- */}
+        {/* --- Split Payment Tab (Omitted for brevity) --- */}
         <Tabs.Panel value="split" pt="md">
             <Grid>
                 <Grid.Col span={6}>
@@ -261,7 +295,7 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
             </Grid>
         </Tabs.Panel>
         
-        {/* --- NEW: Credit Sale Tab --- */}
+        {/* --- MODIFIED: Credit Sale Tab --- */}
         <Tabs.Panel value="credit" pt="md">
             <Group grow mb="md">
                 <Select
@@ -280,24 +314,34 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
 
             <ScrollArea style={{ height: '30vh' }} mb="md">
                 <Grid>
-                    {filteredCreditCustomers.map(customer => (
-                        <Grid.Col span={6} key={customer.id}>
-                            <UnstyledButton
-                                onClick={() => setSelectedCustomerId(customer.id)}
-                                style={{ width: '100%' }}
-                            >
-                                <Paper withBorder p="md" bg={selectedCustomerId === customer.id ? 'blue.0' : 'transparent'}>
-                                    <Group justify="space-between" wrap="nowrap">
-                                        <Text fw={500} lineClamp={1} pr="xs">
-                                            <IconUser size={16} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                                            {customer.name}
-                                        </Text>
-                                        <Text size="sm" c="dimmed">{customer.company?.name || 'Individual'}</Text>
-                                    </Group>
-                                </Paper>
-                            </UnstyledButton>
-                        </Grid.Col>
-                    ))}
+                    {filteredCreditCustomers.map(customer => {
+                        const isDisabled = customer.willExceedLimit; // Use the pre-calculated flag
+                        return (
+                            <Grid.Col span={6} key={customer.id}>
+                                <UnstyledButton
+                                    onClick={() => !isDisabled && setSelectedCustomerId(customer.id)}
+                                    disabled={isDisabled} // DISABLE/DIM if over limit
+                                    style={{ width: '100%' }}
+                                >
+                                    <Paper 
+                                        withBorder p="md" 
+                                        bg={selectedCustomerId === customer.id ? 'blue.0' : 'transparent'} 
+                                        opacity={isDisabled ? 0.4 : 1} // DIM if over limit
+                                    >
+                                        <Group justify="space-between" wrap="nowrap">
+                                            <Text fw={500} lineClamp={1} pr="xs">
+                                                <IconUser size={16} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                                                {customer.name}
+                                            </Text>
+                                            {isDisabled && <Badge color="red" variant="filled">OVER LIMIT</Badge>}
+                                            {!isDisabled && customer.creditStatus?.balance < 0 && <Badge color="orange" variant="light">DEBT</Badge>}
+                                            {!isDisabled && customer.creditStatus?.balance > 0 && <Badge color="green" variant="light">CREDIT</Badge>}
+                                        </Group>
+                                    </Paper>
+                                </UnstyledButton>
+                            </Grid.Col>
+                        );
+                    })}
                 </Grid>
             </ScrollArea>
             
@@ -309,12 +353,33 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
                         {formatCurrency(customerCreditStatus?.balance ?? 0)}
                     </Text>
                 </Group>
-                <Group justify="space-between">
-                    <Text>Available Credit:</Text>
-                    <Text fw={700} c={customerCreditStatus?.isOverdue ? 'red' : 'green'}>
-                        {formatCurrency(customerCreditStatus?.availableCredit ?? 0)}
+
+                {/* --- FIX: Only show Credit Limit and Available Credit if limit > 0 --- */}
+                {customerCreditStatus?.creditLimit > 0 && (
+                  <>
+                    <Group justify="space-between">
+                        <Text>Credit Limit:</Text>
+                        <Text fw={700}>
+                            {formatCurrency(customerCreditStatus.creditLimit)}
+                        </Text>
+                    </Group>
+                    
+                    <Group justify="space-between">
+                        <Text>Available Credit:</Text>
+                        <Text fw={700} c={customerCreditStatus?.willExceedLimit ? 'red' : 'green'}>
+                            {formatCurrency(customerCreditStatus?.availableCredit ?? 0)}
+                        </Text>
+                    </Group>
+                  </>
+                )}
+                {/* --- END FIX --- */}
+                
+                {/* Check if the selected customer is marked as over limit and display the warning */}
+                {allCustomers.find(c => c.id === selectedCustomerId)?.willExceedLimit && (
+                    <Text c="red" size="sm" mt="sm">
+                       This transaction would exceed the available credit limit of {formatCurrency(customerCreditStatus?.creditLimit || 0)}.
                     </Text>
-                </Group>
+                )}
             </Paper>
 
         </Tabs.Panel>
@@ -327,7 +392,11 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
               <Button
                   fullWidth size="xl" h={70}
                   onClick={activeTab === 'credit' ? handleCreditSaleConfirm : handleConfirmSplit}
-                  disabled={activeTab === 'split' ? Math.abs(remainingAmount) > 0.01 : !selectedCustomerId || customerCreditStatus?.isOverdue}
+                  // MODIFIED DISABLED LOGIC: Now checks the selected customer's calculated status
+                  disabled={activeTab === 'split' 
+                      ? Math.abs(remainingAmount) > 0.01 
+                      : (!selectedCustomerId || allCustomers.find(c => c.id === Number(selectedCustomerId))?.willExceedLimit)
+                  }
                   color={activeTab === 'credit' ? 'orange' : 'blue'}
                   leftSection={<IconCheck size={24} />}
               >

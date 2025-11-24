@@ -103,6 +103,7 @@ contextBridge.exposeInMainWorld('api', {
   getCustomers: () => ipcRenderer.invoke('get-customers'),
   addCustomer: (data) => ipcRenderer.invoke('add-customer', data),
   updateCustomer: (data) => ipcRenderer.invoke('update-customer', data),
+  deleteCustomer: (id) => ipcRenderer.invoke('delete-customer', id), // <-- ADDED
   addCustomerPayment: (data) => ipcRenderer.invoke('add-customer-payment', data), // { customerId, amount, method }
   getCustomerCreditStatus: (customerId) => ipcRenderer.invoke('get-customer-credit-status', customerId),
   // --- END NEW ---

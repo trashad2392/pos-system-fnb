@@ -11,7 +11,7 @@ let tempOrderData = null;
 // This helper function creates the URL for the print window
 function getPrintURL() {
   if (isDev) {
-    return 'http://localhost:3000/print/receipt/';
+    return 'http://localhost:3001/print/receipt/'; // <-- FIX: Changed port to 3001
   } else {
     return 'app://./print/receipt/index.html';
   }

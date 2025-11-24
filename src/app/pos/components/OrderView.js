@@ -100,21 +100,28 @@ export default function OrderView({
   }
   // --- END MODIFICATION ---
 
-
+  // --- MODIFIED: Helper function to explicitly show "Credit Sale" ---
   const formatPaymentMethods = (methods) => {
-     // ... (remains the same)
     if (!methods || methods.length === 0) return null;
-    if (methods.length === 1) return `${methods[0].method}`;
-    const names = methods.map(p => p.method).join(' + ');
-    return names.length > 15 ? 'Split' : names; // Shortened "Split Payment"
+
+    const creditPayment = methods.find(p => p.method === 'Credit');
+    if (creditPayment) {
+        // If it's a credit payment, always show "Credit Sale"
+        return 'Credit Sale';
+    }
+
+    if (methods.length === 1) return methods[0].method;
+    
+    // For split cash/card/other payments, show "Split Payment"
+    return 'Split Payment';
   };
 
   const selectedPaymentText = formatPaymentMethods(selectedPaymentMethods);
 
   const FinalPaymentButtonIcon = selectedPaymentMethods ? IconCurrencyDollar : IconCash;
-  // --- MODIFIED: Removed "Pay by " prefix ---
+  // --- MODIFIED: Check for Credit Sale in button text logic ---
   const finalPaymentButtonText = selectedPaymentMethods
-    ? `${selectedPaymentText}` // Just the method name(s)
+    ? (selectedPaymentMethods.some(p => p.method === 'Credit') ? 'Credit Sale' : selectedPaymentText)
     : 'Fast Cash';
   const finalPaymentButtonAction = selectedPaymentMethods ? onFinalize : onFastCash;
   const finalPaymentButtonColor = selectedPaymentMethods ? 'blue' : 'green';
@@ -127,13 +134,13 @@ export default function OrderView({
         {/* --- Title Group --- */}
         <Group justify="space-between" align="center" mb="md" wrap="nowrap">
           <Title order={2} style={{ flexShrink: 1, minWidth: 0 }}>Current Order</Title>
-           {/* --- MODIFIED: Flashing Text using CSS module classes --- */}
+           {/* --- MODIFIED: Flashing Text uses updated selectedPaymentText --- */}
            {selectedPaymentMethods && (
             <Alert
               icon={<IconInfoCircle size=".9rem" />}
               variant="unstyled"
               p={0}
-              styles={{ root: { padding: 0, background: 'none' } }} // Ensure no background/padding
+              styles={{ root: { padding: 0, background: 'none' } }}
               // --- Apply CSS module classes ---
               className={styles.transparentAlert}
               classNames={{ message: styles.flashingAlertMessage }}
@@ -148,7 +155,6 @@ export default function OrderView({
         <Paper withBorder style={{ height: 'calc(85vh - 40px)', display: 'flex', flexDirection: 'column' }}>
           <ScrollArea style={{ flex: 1 }}>
             <Box p="xs">
-              {/* ... (Order comment and item list remain the same) ... */}
                {order?.comment && (
                  <Paper withBorder p="xs" mb="sm" shadow="xs" bg="blue.0">
                    <Group gap="xs">
@@ -167,7 +173,7 @@ export default function OrderView({
                     if (item.discount) {
                       if (item.discount.type === 'PERCENT') {
                         discountedItemTotal *= (1 - item.discount.value / 100);
-                      } else {
+                      } else { // FIXED
                         discountedItemTotal -= (item.discount.value * item.quantity);
                       }
                     }
@@ -226,7 +232,6 @@ export default function OrderView({
           </Box>
 
           <Box p="md" pt={0} mt="auto">
-             {/* ... (Note and Discount buttons remain the same) ... */}
              <Group grow mb="sm">
                 <Button variant="default" leftSection={<IconPencil size={16} />} onClick={() => order && onOpenCommentModal(order)} disabled={isCartEmpty || !order}>
                 Order Note
@@ -241,7 +246,6 @@ export default function OrderView({
 
             <Divider my="sm" />
 
-            {/* ... (Total display remains the same) ... */}
              {discountAmount > 0.001 && (
                <>
                  <Group justify="space-between">
@@ -254,13 +258,11 @@ export default function OrderView({
                  </Group>
                </>
              )}
-             {/* --- MODIFIED: Show minimum warning if discount exists but isn't applied --- */}
              {order?.discount && discountAmount < 0.001 && order.discount.minimumOrderAmount > 0 && (
                 <Text size="sm" c="red" ta="right">
                     Subtotal of ${subtotal.toFixed(2)} does not meet ${order.discount.name} minimum of ${order.discount.minimumOrderAmount.toFixed(2)}.
                 </Text>
              )}
-             {/* --- END MODIFICATION --- */}
              <Group justify="space-between">
                <Title order={3}>Total:</Title>
                <Title order={3}>${Number(order?.totalAmount || 0).toFixed(2)}</Title>
@@ -268,7 +270,6 @@ export default function OrderView({
 
 
             <Grid mt="md">
-               {/* ... (Hold and Clear buttons remain the same) ... */}
                <Grid.Col span={6}>
                  <Button size="lg" fullWidth variant="outline" leftSection={<IconDeviceFloppy size={20} />} onClick={onHold} disabled={order?.orderType === 'Dine-In'}>
                    {isCartEmpty ? 'View Held' : 'Hold Order'}
@@ -287,7 +288,6 @@ export default function OrderView({
                     disabled={isCartEmpty}
                     onClick={finalPaymentButtonAction}
                     color={finalPaymentButtonColor}
-                    // --- Ensure Icon component is rendered correctly ---
                     leftSection={<FinalPaymentButtonIcon size={20} />}
                  >
                     {finalPaymentButtonText}
@@ -303,9 +303,8 @@ export default function OrderView({
         </Paper>
       </Grid.Col>
 
-      {/* ===== Menu Panel ===== */}
+      {/* ===== Menu Panel (Omitted for brevity) ===== */}
       <Grid.Col span={7}>
-         {/* ... (Menu panel header remains the same) ... */}
          <Group justify="space-between" mb="md">
             <Title order={2} style={{ flexGrow: 1, marginRight: '10px' }}>
                 {order?.table ? `Order for ${order.table.name}` : `${order?.orderType || 'New'} Order`}
