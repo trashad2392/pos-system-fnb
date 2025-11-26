@@ -7,9 +7,9 @@ import { IconBackspace } from '@tabler/icons-react';
 // It now accepts a 'disabled' prop
 export default function Keypad({ onNumberPress, onBackspace, onClear, disabled }) {
   const buttons = [
-    ['7', '8', '9'],
-    ['4', '5', '6'],
     ['1', '2', '3'],
+    ['4', '5', '6'],
+    ['7', '8', '9'],
   ];
 
   return (

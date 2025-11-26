@@ -1,4 +1,4 @@
-// src/app/pos/page.js
+// src/app/pos/components/PosPage.js
 "use client";
 
 import { Loader, Center } from '@mantine/core';
@@ -20,7 +20,7 @@ export default function PosPage() {
     commentModalOpened, commentTarget, keyboardVisible,
     discountTarget, discountModalOpened,
     selectedPaymentMethods,
-    paymentModalInitialTab, // <-- Get initial tab state
+    paymentModalInitialTab,
     actions
   } = usePosLogic();
 
@@ -65,7 +65,9 @@ export default function PosPage() {
   }
 
   return (
-    <div>
+    // 🛑 REVERT: Minimal wrapper. The vertical scroll issue is now definitively 
+    // located in the 100px calculation or global browser margins/padding.
+    <div style={{ position: 'relative' }}>
       {renderView()}
 
       <ModifierModal
@@ -78,14 +80,14 @@ export default function PosPage() {
       <PaymentModal
         order={activeOrder}
         opened={paymentModalOpened}
-        onClose={actions.closePaymentModal} // This one is named correctly
+        onClose={actions.closePaymentModal}
         onSelectPayment={actions.handleSelectPayment}
-        initialTab={paymentModalInitialTab} // <-- Pass initial tab prop
+        initialTab={paymentModalInitialTab}
       />
 
       <HeldOrdersModal
         opened={heldOrdersModalOpened}
-        onClose={actions.closeHeldOrdersModal} // This one is named correctly
+        onClose={actions.closeHeldOrdersModal}
         heldOrders={heldOrders}
         onResume={actions.handleResumeHeldOrder}
         onDelete={actions.handleDeleteHeldOrder}
@@ -94,7 +96,7 @@ export default function PosPage() {
 
       <CommentModal
         opened={commentModalOpened}
-        onClose={actions.handleCloseCommentModal} // <-- FIXED
+        onClose={actions.handleCloseCommentModal}
         onSave={actions.handleSaveComment}
         target={commentTarget}
         keyboardVisible={keyboardVisible}
@@ -103,7 +105,7 @@ export default function PosPage() {
 
       <DiscountModal
         opened={discountModalOpened}
-        onClose={actions.handleCloseDiscountModal} // <-- FIXED
+        onClose={actions.handleCloseDiscountModal}
         onSelectDiscount={actions.handleSelectDiscount}
         target={discountTarget}
         discounts={discounts}

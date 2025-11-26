@@ -1,13 +1,14 @@
 /* src/app/pos/components/OrderView.module.css */
 
-@keyframes blink-red {
+@keyframes instant-blink {
   0% { opacity: 1; }
-  50% { opacity: 0.3; }
-  100% { opacity: 1; }
+  49% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 0; }
 }
 
 .flashingAlertMessage {
-  animation: blink-red 1.0s linear infinite; /* Faster blink */
+  animation: instant-blink 1.0s step-end infinite; /* Use step-end for instant switch */
   color: red !important; /* Force color */
   font-weight: bold !important; /* Force bold */
   font-size: 1.2rem !important; /* Slightly larger size */

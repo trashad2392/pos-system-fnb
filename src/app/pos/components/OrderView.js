@@ -2,10 +2,13 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Title, Grid, Button, Paper, Text, Group, Tabs, ScrollArea, Divider, Center, Box, ActionIcon, Badge, Image, Stack, UnstyledButton, AspectRatio, Alert } from '@mantine/core';
-import { IconArrowLeft, IconDeviceFloppy, IconEraser, IconX, IconPencil, IconCash, IconTag, IconNote, IconCreditCard, IconReceipt, IconInfoCircle, IconCurrencyDollar } from '@tabler/icons-react';
+import { Title, Grid, Button, Paper, Text, Group, Divider, Center, Box, Alert } from '@mantine/core';
+import { IconCash, IconInfoCircle, IconCurrencyDollar } from '@tabler/icons-react';
 import Keypad from './Keypad';
-import styles from './OrderView.module.css'; // <-- Import CSS module
+import ActionSidebar from './ActionSidebar';
+import MenuPanel from './MenuPanel';
+import CartPanel from './CartPanel';
+import styles from './OrderView.module.css'; 
 
 export default function OrderView({
   order,
@@ -25,7 +28,6 @@ export default function OrderView({
   selectedPaymentMethods,
   openPaymentModal,
 }) {
-  const { categories, products } = menu;
   const [keypadInput, setKeypadInput] = useState('');
   const isCartEmpty = !order || !order.items || order.items.length === 0;
 
@@ -33,28 +35,22 @@ export default function OrderView({
     setKeypadInput('');
   }, [selectedItemId]);
 
-  // --- Keypad Handlers (remain the same) ---
   const handleNumberPress = (number) => {
     if (!selectedItemId) return;
     const currentVal = keypadInput === '0' ? '' : keypadInput;
     const newString = (currentVal + number).slice(0, 4);
     setKeypadInput(newString);
     const newQuantity = parseInt(newString, 10);
-    if (!isNaN(newQuantity)) {
-      onUpdateQuantity(selectedItemId, newQuantity);
-    }
+    if (!isNaN(newQuantity)) onUpdateQuantity(selectedItemId, newQuantity);
   };
   const handleBackspace = () => {
     if (!selectedItemId) return;
     const newString = keypadInput.slice(0, -1);
     setKeypadInput(newString);
-    if (newString === '') {
-      onUpdateQuantity(selectedItemId, 1);
-    } else {
-      const newQuantity = parseInt(newString, 10);
-      if (!isNaN(newQuantity)) {
-        onUpdateQuantity(selectedItemId, newQuantity);
-      }
+    if (newString === '') onUpdateQuantity(selectedItemId, 1);
+    else {
+        const newQuantity = parseInt(newString, 10);
+        if (!isNaN(newQuantity)) onUpdateQuantity(selectedItemId, newQuantity);
     }
   };
   const handleClear = () => {
@@ -62,10 +58,8 @@ export default function OrderView({
     setKeypadInput('');
     onUpdateQuantity(selectedItemId, 1);
   };
-  // --- End Keypad Handlers ---
 
   const calculateItemTotal = (item) => {
-    // ... (remains the same)
     if (!item) return 0;
     const basePrice = item.priceAtTimeOfOrder || 0;
     const modifiersPrice = (item.selectedModifiers || []).reduce((acc, mod) => {
@@ -76,288 +70,151 @@ export default function OrderView({
     return (basePrice + modifiersPrice) * (item.quantity || 0);
   };
 
-  const handleDiscountClick = () => {
-    if (order) {
-      onOpenDiscountModal(order);
-    }
-  };
-
-  const subtotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
-  // --- MODIFIED: Ensure minimumOrderAmount is checked ---
-  // We calculate this just for display, the backend does the real check
+  const subtotal = order?.items?.reduce((sum, item) => {
+      let itemTotal = calculateItemTotal(item);
+      if (item.discount) {
+          if (item.discount.type === 'PERCENT') itemTotal *= (1 - item.discount.value / 100);
+          else itemTotal -= (item.discount.value * item.quantity);
+      }
+      return sum + itemTotal;
+  }, 0) || 0;
+  
   let discountAmount = 0;
+  const preOrderDiscountSubtotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
+  
   if (order?.discount) {
     const minAmount = order.discount.minimumOrderAmount || 0;
-    if (subtotal >= minAmount) {
-      if (order.discount.type === 'PERCENT') {
-        discountAmount = subtotal * (order.discount.value / 100);
-      } else { // FIXED
-        discountAmount = order.discount.value;
-      }
-      // Ensure discount doesn't exceed subtotal
-      discountAmount = Math.min(subtotal, discountAmount);
+    if (preOrderDiscountSubtotal >= minAmount) {
+      if (order.discount.type === 'PERCENT') discountAmount = preOrderDiscountSubtotal * (order.discount.value / 100);
+      else discountAmount = order.discount.value;
+      discountAmount = Math.min(preOrderDiscountSubtotal, discountAmount);
     }
   }
-  // --- END MODIFICATION ---
 
-  // --- MODIFIED: Helper function to explicitly show "Credit Sale" ---
   const formatPaymentMethods = (methods) => {
     if (!methods || methods.length === 0) return null;
-
     const creditPayment = methods.find(p => p.method === 'Credit');
-    if (creditPayment) {
-        // If it's a credit payment, always show "Credit Sale"
-        return 'Credit Sale';
-    }
-
+    if (creditPayment) return 'Credit Sale';
     if (methods.length === 1) return methods[0].method;
-    
-    // For split cash/card/other payments, show "Split Payment"
     return 'Split Payment';
   };
 
   const selectedPaymentText = formatPaymentMethods(selectedPaymentMethods);
-
   const FinalPaymentButtonIcon = selectedPaymentMethods ? IconCurrencyDollar : IconCash;
-  // --- MODIFIED: Check for Credit Sale in button text logic ---
   const finalPaymentButtonText = selectedPaymentMethods
-    ? (selectedPaymentMethods.some(p => p.method === 'Credit') ? 'Credit Sale' : selectedPaymentText)
+    ? (selectedPaymentMethods.some(p => p.method === 'Credit') ? 'Charge Account' : `Pay by ${selectedPaymentText}`)
     : 'Fast Cash';
   const finalPaymentButtonAction = selectedPaymentMethods ? onFinalize : onFastCash;
   const finalPaymentButtonColor = selectedPaymentMethods ? 'blue' : 'green';
 
+  // --- HEIGHT MANAGEMENT ---
+  const totalGridHeight = 'calc(100vh - 100px)'; 
+
+  const columnStyle = {
+      height: totalGridHeight,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden' 
+  };
 
   return (
-    <Grid>
-      {/* ===== Order Summary Panel ===== */}
-      <Grid.Col span={5}>
-        {/* --- Title Group --- */}
-        <Group justify="space-between" align="center" mb="md" wrap="nowrap">
-          <Title order={2} style={{ flexShrink: 1, minWidth: 0 }}>Current Order</Title>
-           {/* --- MODIFIED: Flashing Text uses updated selectedPaymentText --- */}
+    <Grid gutter="xs" style={{ height: totalGridHeight, overflow: 'hidden' }}>
+      {/* 1. Action Sidebar (Col 1.5) */}
+      <Grid.Col span={{ base: 12, xs: 1.5 }} style={{ minWidth: 65, ...columnStyle }}>
+        <ActionSidebar
+          order={order}
+          isCartEmpty={isCartEmpty}
+          selectedItemId={selectedItemId}
+          onOpenCommentModal={onOpenCommentModal}
+          onOpenDiscountModal={onOpenDiscountModal}
+          onHold={onHold}
+          onClearOrder={onClearOrder}
+          openPaymentModal={openPaymentModal}
+        />
+      </Grid.Col>
+
+      {/* 2. Cart Panel & Keypad (Col 3) */}
+      <Grid.Col span={{ base: 12, xs: 3 }} style={columnStyle}>
+        
+        {/* Header/Title - Fixed Height (Shrink 0) */}
+        <Group justify="space-between" align="center" mb="xs" style={{ flexShrink: 0, paddingBottom: 5 }}>
+          <Title order={3}>Cart</Title>
            {selectedPaymentMethods && (
             <Alert
               icon={<IconInfoCircle size=".9rem" />}
               variant="unstyled"
               p={0}
-              styles={{ root: { padding: 0, background: 'none' } }}
-              // --- Apply CSS module classes ---
               className={styles.transparentAlert}
               classNames={{ message: styles.flashingAlertMessage }}
-              style={{ flexShrink: 0 }} // Keep it from wrapping awkwardly
             >
               {selectedPaymentText}
             </Alert>
           )}
         </Group>
-        {/* --- End Title Group --- */}
 
-        <Paper withBorder style={{ height: 'calc(85vh - 40px)', display: 'flex', flexDirection: 'column' }}>
-          <ScrollArea style={{ flex: 1 }}>
-            <Box p="xs">
-               {order?.comment && (
-                 <Paper withBorder p="xs" mb="sm" shadow="xs" bg="blue.0">
-                   <Group gap="xs">
-                     <IconNote size={16} style={{ flexShrink: 0 }}/>
-                     <Text size="sm" style={{ whiteSpace: 'pre-wrap', flexGrow: 1 }}>
-                         {order.comment}
-                     </Text>
-                   </Group>
-                 </Paper>
-               )}
-               {!isCartEmpty ? (
-                  order.items.map(item => {
-                    const itemTotal = calculateItemTotal(item);
-                    // --- This logic is fine, as item.discount is separate ---
-                    let discountedItemTotal = itemTotal;
-                    if (item.discount) {
-                      if (item.discount.type === 'PERCENT') {
-                        discountedItemTotal *= (1 - item.discount.value / 100);
-                      } else { // FIXED
-                        discountedItemTotal -= (item.discount.value * item.quantity);
-                      }
-                    }
-                    return (
-                      <Box key={item.id} onClick={() => onSelectItem(item.id)} style={{ cursor: 'pointer' }}>
-                        <Paper withBorder p="xs" mb="xs" shadow={selectedItemId === item.id ? 'md' : 'xs'}
-                          style={selectedItemId === item.id ? { border: `1px solid var(--mantine-color-blue-6)` } : {}}
-                        >
-                          <Group justify="space-between">
-                              <Text fw={500}>{item.product?.name || 'Unknown Item'}</Text>
-                              <ActionIcon color="red" variant="subtle" onClick={(e) => { e.stopPropagation(); onRemoveItem(item.id); }}>
-                                  <IconX size={16} />
-                              </ActionIcon>
-                          </Group>
-                          {item.comment && (<Text size="xs" c="blue.8" fs="italic" mt={-5} mb={5} pl="sm" style={{ whiteSpace: 'pre-wrap' }}>&bull; {item.comment}</Text>)}
-                          {item.selectedModifiers && item.selectedModifiers.length > 0 && (
-                              <Box pl="sm" mt={-5} mb={5}>
-                              {item.selectedModifiers.map(mod => (
-                                  <Text key={mod.id} size="xs" c="dimmed">
-                                  &bull; {mod.modifierOption?.name || 'Unknown Modifier'}
-                                  {mod.quantity > 1 ? ` (x${mod.quantity})` : ''}
-                                  {(mod.modifierOption?.priceAdjustment || 0) > 0 ? ` (+$${((mod.modifierOption?.priceAdjustment || 0) * mod.quantity).toFixed(2)})` : ''}
-                                  </Text>
-                              ))}
-                              </Box>
-                          )}
-                          {item.discount && (
-                              <Badge color="red" variant="outline" size="sm" mt={2} mb={5} ml="sm">
-                                  {item.discount.name}
-                              </Badge>
-                          )}
-                          <Group justify="space-between" mt="xs">
-                            <Text size="lg" fw={700}>Qty: {item.quantity}</Text>
-                            {item.discount ? (
-                              <Group gap={5}>
-                                  <Text td="line-through" c="dimmed">${itemTotal.toFixed(2)}</Text>
-                                  <Text fw={500}>${discountedItemTotal.toFixed(2)}</Text>
-                              </Group>
-                            ) : (
-                              <Text fw={500}>${itemTotal.toFixed(2)}</Text>
-                            )}
-                          </Group>
-                        </Paper>
-                      </Box>
-                    )
-                  })
-               ) : (
-                 <Center style={{ height: '100%' }}><Text c="dimmed">Cart is empty</Text></Center>
-               )}
-            </Box>
-          </ScrollArea>
+        {/* 🛑 FIX: Cart Panel area: Removed marginBottom and rely on Keypad margin for spacing */}
+        <Box style={{ flexGrow: 1, flexShrink: 0, minHeight: 0 }}>
+            <CartPanel
+              order={order}
+              isCartEmpty={isCartEmpty}
+              selectedItemId={selectedItemId}
+              onSelectItem={onSelectItem}
+              onRemoveItem={onRemoveItem}
+              calculateItemTotal={calculateItemTotal}
+            />
+        </Box>
 
-          <Box>
-            <Divider />
-            <Keypad onNumberPress={handleNumberPress} onBackspace={handleBackspace} onClear={handleClear} disabled={selectedItemId === null} />
-          </Box>
+        {/* Keypad & Totals: Fixed Height area (Shrink 0) */}
+        <Box style={{ flexShrink: 0, marginTop: 8 }}> {/* Added top margin for spacing */}
+            <Keypad 
+              onNumberPress={handleNumberPress} 
+              onBackspace={handleBackspace} 
+              onClear={handleClear} 
+              disabled={selectedItemId === null} 
+            />
+            
+            <Box p="xs" pt={0}>
+                <Divider my="xs" />
+                {discountAmount > 0.001 && (
+                <>
+                    <Group justify="space-between">
+                    <Text size="sm">Subtotal:</Text>
+                    <Text size="sm">${preOrderDiscountSubtotal.toFixed(2)}</Text>
+                    </Group>
+                    <Group justify="space-between">
+                    <Text size="sm" c="red">Discount:</Text>
+                    <Text size="sm" c="red">- ${discountAmount.toFixed(2)}</Text>
+                    </Group>
+                </>
+                )}
+                
+                <Group justify="space-between" mb="xs">
+                    <Title order={3}>Total:</Title>
+                    <Title order={3}>${Number(order?.totalAmount || 0).toFixed(2)}</Title>
+                </Group>
 
-          <Box p="md" pt={0} mt="auto">
-             <Group grow mb="sm">
-                <Button variant="default" leftSection={<IconPencil size={16} />} onClick={() => order && onOpenCommentModal(order)} disabled={isCartEmpty || !order}>
-                Order Note
-                </Button>
-                <Button variant="default" leftSection={<IconPencil size={16} />} onClick={() => { const item = order?.items?.find(i => i.id === selectedItemId); if (item) onOpenCommentModal(item);}} disabled={!selectedItemId}>
-                Item Note
-                </Button>
-             </Group>
-             <Button fullWidth variant="light" color="red" leftSection={<IconTag size={16} />} onClick={handleDiscountClick} disabled={isCartEmpty || !order} mb="sm">
-                Discount Order
-             </Button>
-
-            <Divider my="sm" />
-
-             {discountAmount > 0.001 && (
-               <>
-                 <Group justify="space-between">
-                   <Text>Subtotal:</Text>
-                   <Text>${subtotal.toFixed(2)}</Text>
-                 </Group>
-                 <Group justify="space-between">
-                   <Text c="red">Discount:</Text>
-                   <Text c="red">- ${discountAmount.toFixed(2)}</Text>
-                 </Group>
-               </>
-             )}
-             {order?.discount && discountAmount < 0.001 && order.discount.minimumOrderAmount > 0 && (
-                <Text size="sm" c="red" ta="right">
-                    Subtotal of ${subtotal.toFixed(2)} does not meet ${order.discount.name} minimum of ${order.discount.minimumOrderAmount.toFixed(2)}.
-                </Text>
-             )}
-             <Group justify="space-between">
-               <Title order={3}>Total:</Title>
-               <Title order={3}>${Number(order?.totalAmount || 0).toFixed(2)}</Title>
-             </Group>
-
-
-            <Grid mt="md">
-               <Grid.Col span={6}>
-                 <Button size="lg" fullWidth variant="outline" leftSection={<IconDeviceFloppy size={20} />} onClick={onHold} disabled={order?.orderType === 'Dine-In'}>
-                   {isCartEmpty ? 'View Held' : 'Hold Order'}
-                 </Button>
-               </Grid.Col>
-               <Grid.Col span={6}>
-                 <Button size="lg" fullWidth variant="outline" color="red" leftSection={<IconEraser size={20} />} disabled={isCartEmpty} onClick={onClearOrder}>
-                   Clear Cart
-                 </Button>
-               </Grid.Col>
-
-              <Grid.Col span={6}>
-                 <Button
-                    size="lg"
+                <Button
+                    size="xl"
                     fullWidth
                     disabled={isCartEmpty}
                     onClick={finalPaymentButtonAction}
                     color={finalPaymentButtonColor}
-                    leftSection={<FinalPaymentButtonIcon size={20} />}
-                 >
+                    leftSection={<FinalPaymentButtonIcon size={24} />}
+                >
                     {finalPaymentButtonText}
-                 </Button>
-              </Grid.Col>
-              <Grid.Col span={6}>
-                <Button size="lg" fullWidth disabled={isCartEmpty} onClick={openPaymentModal} variant='light'>
-                    Other Payments
                 </Button>
-              </Grid.Col>
-            </Grid>
-          </Box>
-        </Paper>
+            </Box>
+        </Box>
       </Grid.Col>
 
-      {/* ===== Menu Panel (Omitted for brevity) ===== */}
-      <Grid.Col span={7}>
-         <Group justify="space-between" mb="md">
-            <Title order={2} style={{ flexGrow: 1, marginRight: '10px' }}>
-                {order?.table ? `Order for ${order.table.name}` : `${order?.orderType || 'New'} Order`}
-            </Title>
-            <Button onClick={onBack} variant="outline" leftSection={<IconArrowLeft size={16} />} style={{ flexShrink: 0 }}>
-                Back to Home
-            </Button>
-        </Group>
-        <Paper withBorder p="md">
-            <Tabs defaultValue={categories?.length > 0 ? categories[0].id.toString() : null}>
-              <Tabs.List>
-                  {(categories || []).map(cat => (<Tabs.Tab key={cat.id} value={cat.id.toString()}>{cat.name}</Tabs.Tab>))}
-              </Tabs.List>
-              {(categories || []).map(cat => (
-                  <Tabs.Panel key={cat.id} value={cat.id.toString()} pt="xs">
-                  <ScrollArea style={{ height: 'calc(75vh + 20px)' }}>
-                      <Grid>
-                      {/* --- START: VISUAL PRODUCT GRID --- */}
-                      {(products || []).filter(p => p.categoryId === cat.id).map(product => (
-                          <Grid.Col span={{ base: 6, sm: 4, md: 3 }} key={product.id}>
-                            <UnstyledButton
-                              onClick={() => onProductSelect(product)}
-                              style={{ width: '100%' }}
-                            >
-                              <Paper withBorder shadow="sm" p="xs" radius="md">
-                                <Stack align="center" justify="center" gap={4}>
-                                  <AspectRatio ratio={4 / 3} style={{ width: '100%' }}>
-                                    {product.image ? (
-                                      <Image src={product.image} alt={product.name} fit="contain" />
-                                    ) : (
-                                      <Center style={{ height: '100%', border: '1px dashed var(--mantine-color-gray-3)', borderRadius: '4px' }}>
-                                        <Text size="xs" c="dimmed">No Image</Text>
-                                      </Center>
-                                    )}
-                                  </AspectRatio>
-                                  <Text size="sm" wrap="wrap" ta="center" lh={1.2} mt={4} style={{ height: '40px' }}>
-                                    {product.name}
-                                  </Text>
-                                  <Text size="sm" fw={500} c="dimmed">
-                                    ${product.price.toFixed(2)}
-                                  </Text>
-                                </Stack>
-                              </Paper>
-                            </UnstyledButton>
-                          </Grid.Col>
-                      ))}
-                      {/* --- END: VISUAL PRODUCT GRID --- */}
-                      </Grid>
-                  </ScrollArea>
-                  </Tabs.Panel>
-              ))}
-            </Tabs>
-        </Paper>
+      {/* 3. Menu Panel (Col 7.5) */}
+      <Grid.Col span={{ base: 12, xs: 7.5 }} style={columnStyle}>
+        <MenuPanel
+          order={order}
+          onBack={onBack}
+          menu={menu}
+          onProductSelect={onProductSelect}
+        />
       </Grid.Col>
     </Grid>
   );
