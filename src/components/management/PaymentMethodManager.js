@@ -1,6 +1,7 @@
 // src/components/management/PaymentMethodManager.js
 "use client";
-import { useState, useEffect, useCallback } from 'react';
+// 🔥 FIX 1: Added useMemo to the import list
+import { useState, useEffect, useCallback, useMemo } from 'react'; 
 import {
   Title, Box, TextInput, Table, Button, Paper, Group, ActionIcon, Modal, Switch, Text, SimpleGrid, Space
 } from '@mantine/core';
@@ -105,6 +106,9 @@ export default function PaymentMethodManager() {
   const [opened, { open, close }] = useDisclosure(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // 🔥 NEW STATE: Tracks if a custom icon upload is in progress
+  const [isUploadingCustomIcon, setIsUploadingCustomIcon] = useState(false);
+
   // Popover controls kept for structure, although logic is replaced by direct grid
   const [colorPickerOpened, colorPickerControls] = useDisclosure(false);
   const [iconPickerOpened, iconPickerControls] = useDisclosure(false);
@@ -153,9 +157,12 @@ export default function PaymentMethodManager() {
     open();
   };
   
+  // FIX: This function now includes persistence logic AND toggles the loading state
   const handleIconUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+
+    setIsUploadingCustomIcon(true); // 🔥 SET LOADING START
 
     const reader = new FileReader();
     reader.onloadend = async () => {
@@ -174,8 +181,8 @@ export default function PaymentMethodManager() {
             setEditingMethod(prev => ({
                 ...prev,
                 iconSourceType: 'custom',
-                customIconUrl: persistentUrl, // Use the URL returned by the API
-                iconName: '',
+                customIconUrl: persistentUrl, 
+                iconName: '', // Cleared, as it is now custom
             }));
 
             notifications.show({ title: 'Success', message: `Icon saved and ready for use.`, color: 'green' });
@@ -183,12 +190,15 @@ export default function PaymentMethodManager() {
         } catch (error) {
             // Display error if window.api.saveIconImage is not found or throws
             notifications.show({ title: 'Error', message: `Failed to save icon: ${error.message}`, color: 'red' });
+        } finally {
+             setIsUploadingCustomIcon(false); // 🔥 SET LOADING END
         }
     };
     reader.readAsDataURL(file);
   };
 
   const handleSaveMethod = async () => {
+    // This frontend validation requires *either* iconName OR customIconUrl
     if (!editingMethod.name.trim() || !editingMethod.color || (!editingMethod.iconName && !editingMethod.customIconUrl)) {
         notifications.show({ title: 'Error', message: 'Name, Color, and Icon are required.', color: 'red' });
         return;
@@ -199,7 +209,7 @@ export default function PaymentMethodManager() {
       name: editingMethod.name.trim(),
       isActive: editingMethod.isActive,
       color: editingMethod.color, 
-      iconName: editingMethod.iconName,
+      iconName: editingMethod.iconName || null,
       iconSourceType: editingMethod.iconSourceType,
       customIconUrl: editingMethod.customIconUrl,
     };
@@ -221,8 +231,8 @@ export default function PaymentMethodManager() {
 
   const handleToggleActive = async (id, name) => {
     if (name === 'Cash') {
-        notifications.show({ title: 'Error', message: `The "${name}" payment method's active status cannot be manually toggled.`, color: 'red' });
-        return;
+        notifications.show({ title: 'Info', message: `The "${name}" payment method's active status cannot be manually toggled.`, color: 'yellow' });
+         return;
     }
     if (window.confirm(`Are you sure you want to toggle the active status of "${name}"?`)) {
       try {
@@ -282,6 +292,26 @@ export default function PaymentMethodManager() {
         notifications.show({ title: 'Error', message: `Failed to reorder: ${error.message}`, color: 'red' });
     }
   };
+
+  // Logic to determine if Save should be disabled
+  const isSaveDisabled = useMemo(() => {
+      // 1. Is an upload running?
+      if (isUploadingCustomIcon) return true;
+
+      // 2. Are required fields missing?
+      const nameMissing = !editingMethod.name.trim();
+      const colorMissing = !editingMethod.color;
+      
+      // 3. Is icon selection invalid?
+      // Invalid if Preset mode is active but iconName is missing (which is default on new method)
+      const isPresetInvalid = editingMethod.iconSourceType === 'preset' && !editingMethod.iconName;
+      // Invalid if Custom mode is active but customIconUrl is missing (before upload completes)
+      const isCustomInvalid = editingMethod.iconSourceType === 'custom' && !editingMethod.customIconUrl;
+      
+      // Save is disabled if any required field is missing OR if the current icon selection is incomplete.
+      return nameMissing || colorMissing || isPresetInvalid || isCustomInvalid;
+      
+  }, [isUploadingCustomIcon, editingMethod]);
 
 
   if (isLoading) {
@@ -398,6 +428,7 @@ export default function PaymentMethodManager() {
                     htmlFor="icon-upload"
                     // Use absolute positioning within the Mantine rightSection container
                     style={{ position: 'absolute', right: 4 }} 
+                    disabled={isUploadingCustomIcon} // Disable browse button during upload
                 >
                     Browse
                 </Button>
@@ -428,7 +459,7 @@ export default function PaymentMethodManager() {
                         ...p, 
                         customIconUrl: '', 
                         iconSourceType: 'preset',
-                        iconName: 'IconWallet' 
+                        iconName: p.iconName || 'IconWallet' // Fallback to a preset icon
                     }))}
                 >
                     Clear
@@ -448,7 +479,8 @@ export default function PaymentMethodManager() {
             
             <Group justify="flex-end" mt="xl">
                 <Button variant="default" onClick={close}>Cancel</Button>
-                <Button onClick={handleSaveMethod}>Save Method</Button>
+                {/* 🔥 FINAL FIX: Disable save button if actively uploading OR if the state is invalid */}
+                <Button onClick={handleSaveMethod} disabled={isSaveDisabled} loading={isUploadingCustomIcon}>Save Method</Button>
             </Group>
           </Box>
         )}
@@ -542,7 +574,7 @@ export default function PaymentMethodManager() {
                       )}
                       
                       {/* Delete Permanently */}
-                      {!method.isActive && !isProtected && (
+                      {!isProtected && (
                           <ActionIcon 
                             color="red"
                             variant="filled" 

@@ -39,8 +39,13 @@ model PaymentMethod {
   name         String     @unique
   isActive     Boolean    @default(true)
   displayOrder Int        @default(0)
-  color        String?    // <--- TEMPORARY FIX: Added ?
-  icon         String?    // <--- TEMPORARY FIX: Added ?
+  color        String?
+  icon         String?    // <-- Existing field for old icon style (unused now)
+  
+  // 🔥 NEW FIELDS FOR CUSTOM ICON LOGIC:
+  iconName     String?    // Stores the Tabler icon name if source is 'preset'
+  iconSourceType String?  // 'preset' or 'custom'
+  customIconUrl  String?  // Stores the 'local-media://...' path if source is 'custom'
 }
 // --- END NEW Payment Method Model ---
 

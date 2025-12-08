@@ -294,24 +294,43 @@ export default function PaymentModal({ opened, onClose, order, onSelectPayment, 
         <Tabs.Panel value="full" pt="md">
           <Text ta="center" mb="md">Select a method to pay the full amount.</Text>
           <Grid>
-            {/* --- MODIFIED: Use dynamic methods for Pay in Full --- */}
             {payInFullMethods.map(method => {
-                const Icon = getPaymentIconComponent(method.icon);
+                // Check if it's a custom image first
+                const isCustom = method.iconSourceType === 'custom' && method.customIconUrl;
+                // Use the iconName for presets, which is now saved in the database
+                const IconComponent = getPaymentIconComponent(method.iconName); 
+
                 return (
                   <Grid.Col span={6} key={method.name}>
                     <Button 
-                      fullWidth size="lg" 
+                      fullWidth 
+                      // 🔥 MODIFIED: Increased button size
+                      size="xl" 
                       variant="outline" 
                       color={method.color} // Use dynamic color
-                      leftSection={<Icon />} 
                       onClick={() => handleSinglePaymentSelect(method.name)}
+                      // 🔥 MODIFIED: Increased height for better icon/text spacing
+                      style={{ height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
                     >
-                      {method.name}
+                      {isCustom ? (
+                        <img 
+                            src={method.customIconUrl} 
+                            alt={method.name} 
+                            // 🔥 MODIFIED: Increased image size
+                            style={{ width: '72px', height: '72px', objectFit: 'contain', marginBottom: '5px' }}
+                        />
+                      ) : (
+                        // 🔥 MODIFIED: Increased IconComponent size
+                        <IconComponent size={36} style={{ marginBottom: '5px' }} />
+                      )}
+                      {/* 🔥 MODIFIED: Made text larger and bolder */}
+                      <Text size="xl" fw={700}>
+                        {method.name}
+                      </Text>
                     </Button>
                   </Grid.Col>
                 );
             })}
-            {/* --- END MODIFIED --- */}
           </Grid>
         </Tabs.Panel>
 

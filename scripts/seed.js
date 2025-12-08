@@ -88,13 +88,45 @@ async function main() {
   });
   console.log('Created/Updated "Cashier" role with limited permissions.');
   
-  // --- MODIFIED: Create Default Payment Methods (Removed Credit, Added color/icon) ---
+  // --- MODIFIED: Create Default Payment Methods (Added iconName, iconSourceType, customIconUrl) ---
   const defaultMethods = [
-      { name: 'Cash', displayOrder: 1, isActive: true, color: 'green', icon: 'IconCash' }, 
-      { name: 'Card', displayOrder: 2, color: 'blue', icon: 'IconCreditCard' },
-      { name: 'Wallet', displayOrder: 3, color: 'grape', icon: 'IconWallet' },
-      { name: 'Bank Transfer', displayOrder: 4, color: 'cyan', icon: 'IconBuildingBank' },
-      // Credit is intentionally excluded to prevent it appearing as a full payment option.
+      { 
+          name: 'Cash', 
+          displayOrder: 1, 
+          isActive: true, 
+          color: 'green', 
+          icon: 'IconCash', 
+          iconName: 'IconCash',          // 🔥 FIX: Set iconName
+          iconSourceType: 'preset',      // 🔥 FIX: Set source type
+          customIconUrl: '',             // 🔥 FIX: Set default custom URL
+      }, 
+      { 
+          name: 'Card', 
+          displayOrder: 2, 
+          color: 'blue', 
+          icon: 'IconCreditCard', 
+          iconName: 'IconCreditCard',    // 🔥 FIX: Set iconName
+          iconSourceType: 'preset',
+          customIconUrl: '',
+      },
+      { 
+          name: 'Wallet', 
+          displayOrder: 3, 
+          color: 'grape', 
+          icon: 'IconWallet', 
+          iconName: 'IconWallet',        // 🔥 FIX: Set iconName
+          iconSourceType: 'preset',
+          customIconUrl: '',
+      },
+      { 
+          name: 'Bank Transfer', 
+          displayOrder: 4, 
+          color: 'cyan', 
+          icon: 'IconBuildingBank', 
+          iconName: 'IconBuildingBank',  // 🔥 FIX: Set iconName
+          iconSourceType: 'preset',
+          customIconUrl: '',
+      },
   ];
 
   for (const method of defaultMethods) {
@@ -105,6 +137,9 @@ async function main() {
               displayOrder: method.displayOrder,
               color: method.color,
               icon: method.icon,
+              iconName: method.iconName,
+              iconSourceType: method.iconSourceType,
+              customIconUrl: method.customIconUrl,
           },
           create: { 
               name: method.name, 
@@ -112,6 +147,9 @@ async function main() {
               displayOrder: method.displayOrder,
               color: method.color,
               icon: method.icon,
+              iconName: method.iconName,
+              iconSourceType: method.iconSourceType,
+              customIconUrl: method.customIconUrl,
           },
       });
   }

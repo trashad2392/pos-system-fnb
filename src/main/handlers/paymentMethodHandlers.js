@@ -4,13 +4,12 @@ const { prisma, Prisma } = require('../../lib/db');
 
 function setupPaymentMethodHandlers() {
   // Array of protected system names (only Cash remains)
-  const PROTECTED_NAMES = ['Cash']; // <-- MODIFIED: Removed 'Credit'
+  const PROTECTED_NAMES = ['Cash']; 
 
   // Get all payment methods (active and inactive)
   ipcMain.handle('get-payment-methods', (e, { activeOnly = false } = {}) => {
-    // We explicitly filter out the system Credit payment method from the dynamic list
     const whereClause = { 
-        name: { not: 'Credit' }, // <-- MODIFIED: Always exclude 'Credit' from general listing
+        name: { not: 'Credit' },
         ...(activeOnly ? { isActive: true } : {}) 
     };
     return prisma.paymentMethod.findMany({
@@ -24,10 +23,15 @@ function setupPaymentMethodHandlers() {
     if (!data.name || data.name.trim() === '') {
       throw new Error('Payment method name cannot be empty.');
     }
-    // New fields required for UI customization
-    if (!data.color || !data.icon) {
-        throw new Error('Color and Icon are required for a new payment method.');
+    
+    // 🔥 FIX 1: Validation requires Color AND (iconName OR customIconUrl)
+    // We check if (iconName is NOT null/empty) OR (customIconUrl is NOT null/empty)
+    const isIconValid = (data.iconName && data.iconName.trim() !== '') || (data.customIconUrl && data.customIconUrl.trim() !== '');
+
+    if (!data.color || !isIconValid) {
+        throw new Error('Color and a valid icon selection (preset or custom) are required.');
     }
+    
     const name = data.name.trim();
 
     // Check if name is a reserved name
@@ -45,8 +49,12 @@ function setupPaymentMethodHandlers() {
           name: name,
           isActive: data.isActive !== undefined ? data.isActive : true,
           displayOrder: newDisplayOrder,
-          color: data.color, // <-- NEW
-          icon: data.icon,   // <-- NEW
+          color: data.color, 
+          // Store all new fields explicitly
+          iconName: data.iconName || null, // Store null if empty string is passed
+          iconSourceType: data.iconSourceType || 'preset',
+          customIconUrl: data.customIconUrl || '',
+          icon: data.iconName, // Keep the old 'icon' field updated for compatibility
         },
       });
     } catch (error) {
@@ -65,15 +73,11 @@ function setupPaymentMethodHandlers() {
     if (!currentMethod) throw new Error('Payment method not found.');
     const isProtected = PROTECTED_NAMES.includes(currentMethod.name);
 
-    // 1. Handle Name Update
+    // 1. Handle Name/Status Update
     if (data.name !== undefined) {
-      if (data.name.trim() === '') {
-        throw new Error('Payment method name cannot be empty.');
-      }
+      if (data.name.trim() === '') throw new Error('Payment method name cannot be empty.');
       const newName = data.name.trim();
-      
-      // Prevent renaming to or from a protected name
-      if (PROTECTED_NAMES.includes(newName) && newName !== currentMethod.name) {
+      if ((PROTECTED_NAMES.includes(newName) || newName === 'Credit') && newName !== currentMethod.name) {
          throw new Error(`Cannot rename to "${newName}". That is a reserved system name.`);
       }
       if (isProtected && newName !== currentMethod.name) {
@@ -82,31 +86,26 @@ function setupPaymentMethodHandlers() {
       updateData.name = newName;
     }
     
-    // 2. Handle isActive Update
     if (data.isActive !== undefined) {
-        // Prevent deactivating 'Cash'
         if (currentMethod.name === 'Cash' && data.isActive === false) {
              throw new Error('The "Cash" payment method cannot be deactivated.');
         }
         updateData.isActive = data.isActive;
     }
     
-    // 3. Handle Display Order Update
+    // 2. Handle Display Order Update
     if (data.displayOrder !== undefined) {
         updateData.displayOrder = parseInt(data.displayOrder, 10);
     }
-
-    // 4. Handle Color/Icon Update (Protected methods only allow changing if they are the fields being set)
-    if (data.color !== undefined) {
-        if (isProtected && currentMethod.name === 'Credit') {
-             // Credit is no longer protected for name/active, but we prevent changing its fields if it exists.
-             // Since we remove Credit from seed, this case is mainly for 'Cash'.
-        }
-        updateData.color = data.color;
+    
+    // 3. Handle Style/Icon Updates (New Fields)
+    if (data.color !== undefined) updateData.color = data.color;
+    if (data.iconName !== undefined) {
+        updateData.iconName = data.iconName || null;
+        updateData.icon = data.iconName; // Update old 'icon' for compatibility
     }
-    if (data.icon !== undefined) {
-        updateData.icon = data.icon;
-    }
+    if (data.iconSourceType !== undefined) updateData.iconSourceType = data.iconSourceType;
+    if (data.customIconUrl !== undefined) updateData.customIconUrl = data.customIconUrl;
 
 
     if (Object.keys(updateData).length === 0) {

@@ -1,5 +1,5 @@
 // main.js
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol } = require('electron');
 const path = require('path');
 const { setupAllIpcHandlers } = require('./src/main/handlers');
 const serve = require('electron-serve');
@@ -39,7 +39,7 @@ function createMainWindow() {
 
   // Load the Next.js app
   if (isDev) {
-    // --- CRITICAL FIX: Changed port from 3000 to 3001 to match package.json ---
+    // CRITICAL FIX: Changed port from 3000 to 3001 to match package.json
     mainWindow.loadURL('http://localhost:3001');
   } else {
     loadURL(mainWindow);
@@ -51,6 +51,19 @@ function createMainWindow() {
 }
 
 app.on('ready', () => {
+  // 🔥 CRITICAL FIX: Register the custom protocol to serve local files securely
+  // The custom protocol 'local-media://' is registered here to access saved icons.
+  protocol.registerFileProtocol('local-media', (request, callback) => {
+    // 1. Extract the absolute file path by removing 'local-media://' (13 characters)
+    const url = request.url.substr(13); 
+    
+    // 2. Decode the URI and normalize the path (important for paths with spaces)
+    const filePath = path.normalize(decodeURI(url));
+    
+    // 3. Serve the file directly using the callback
+    callback({ path: filePath }); 
+  });
+  
   createMainWindow();
   // We pass __dirname (the project root) to the handlers
   setupAllIpcHandlers(__dirname);

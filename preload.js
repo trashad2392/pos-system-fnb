@@ -4,8 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   // Image Upload
   uploadImage: () => ipcRenderer.invoke('upload-image'),
-  // 🔥 FIX: ADDED saveIconImage to expose it to the renderer
-  saveIconImage: (data) => ipcRenderer.invoke('save-icon-image', data), 
+  saveIconImage: (data) => ipcRenderer.invoke('save-icon-image', data), // 🔥 FIX: Exposed new handler
 
   // Product Functions
   getProducts: () => ipcRenderer.invoke('get-products'),
