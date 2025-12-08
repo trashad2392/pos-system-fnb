@@ -12,6 +12,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  
+  // 🔥 FIX: MOVED to top level, as required by Next.js 14.2.5+
+  transpilePackages: ['@tabler/icons-react'], 
+  
+  // We can remove the empty 'experimental' block since it's no longer needed for this package.
 };  
 
 export default nextConfig;

@@ -12,7 +12,8 @@ const { setupRoleHandlers } = require('./roleHandlers');
 const { setupMenuHandlers } = require('./menuHandlers');
 const { setupSettingHandlers } = require('./settingHandlers');
 const { setupPrintingHandlers } = require('./printingHandlers'); 
-const { setupCustomerHandlers } = require('./customerHandlers'); // <-- NEW IMPORT
+const { setupCustomerHandlers } = require('./customerHandlers'); 
+const { setupPaymentMethodHandlers } = require('./paymentMethodHandlers'); // <-- NEW IMPORT
 
 function setupAllIpcHandlers(rootDir) {
   // Setup standard handlers (these work fine)
@@ -28,7 +29,8 @@ function setupAllIpcHandlers(rootDir) {
   setupRoleHandlers();
   setupMenuHandlers();
   setupSettingHandlers();
-  setupCustomerHandlers(); // <-- NEW CALL
+  setupCustomerHandlers(); 
+  setupPaymentMethodHandlers(); // <-- NEW CALL
   setupPrintingHandlers(rootDir);
 }
 

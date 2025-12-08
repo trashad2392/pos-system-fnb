@@ -51,7 +51,7 @@
     "@mantine/hooks": "^7.11.1",
     "@mantine/notifications": "^7.11.1",
     "@prisma/client": "^5.17.0",
-    "@tabler/icons-react": "^3.11.0",
+    "@tabler/icons-react": "^2.47.0",
     "date-fns": "^2.30.0",
     "dotenv": "^16.4.5",
     "electron-is-dev": "^3.0.1",
@@ -64,6 +64,9 @@
     "sqlite3": "^5.1.7"
   },
   "devDependencies": {
+    "@types/d3-array": "^3.2.2",
+    "@types/d3-ease": "^3.0.2",
+    "@types/d3-timer": "^3.0.2",
     "concurrently": "^8.2.2",
     "dotenv-cli": "^7.4.2",
     "electron": "^31.2.1",

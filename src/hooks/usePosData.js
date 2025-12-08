@@ -13,6 +13,7 @@ export function usePosData() {
   });
   const [posSettings, setPosSettings] = useState({}); // <-- State for POS settings
   const [discounts, setDiscounts] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]); // <-- NEW STATE
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null); // <-- State for potential errors
 
@@ -28,6 +29,7 @@ export function usePosData() {
         discountData,
         activeMenus,
         settingsData, // <-- Fetch settings
+        paymentMethodData, // <-- NEW: Fetch payment methods
       ] = await Promise.all([
         window.api.getTables(),
         window.api.getProducts(),
@@ -35,11 +37,13 @@ export function usePosData() {
         window.api.getDiscounts(),
         window.api.getMenus({ activeOnly: true }), // Fetch only active menus
         window.api.getPosSettings(), // <-- Fetch POS settings
+        window.api.getPaymentMethods({ activeOnly: true }), // <-- NEW API CALL
       ]);
 
       setTables(tableData);
       setDiscounts(discountData.filter((d) => d.isActive));
       setPosSettings(settingsData); // <-- Store settings
+      setPaymentMethods(paymentMethodData); // <-- NEW: Store payment methods
 
       // --- Store all data related to active menus ---
       if (activeMenus && activeMenus.length > 0) {
@@ -75,6 +79,7 @@ export function usePosData() {
       setFullActiveMenuData({ menus: [], categories: [], products: [] });
       setTables([]);
       setDiscounts([]);
+      setPaymentMethods([]); // <-- NEW: Clear on error
       setPosSettings({});
     } finally {
       setIsLoading(false);
@@ -91,6 +96,7 @@ export function usePosData() {
     fullActiveMenuData, // <-- Expose all active menu data
     posSettings,        // <-- Expose settings
     discounts,
+    paymentMethods,     // <-- NEW: Expose payment methods
     isLoading,
     error,              // <-- Expose error state
     refreshData: fetchData

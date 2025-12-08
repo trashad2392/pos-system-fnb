@@ -13,8 +13,8 @@ const permissions = [
   { name: 'discounts:apply', description: 'Can apply discounts to orders and items' },
   { name: 'discounts:manage', description: 'Can create and edit discounts' },
   { name: 'settings:manage_pos', description: 'Can assign menus to POS order types' },
-  // --- ADDED THIS LINE ---
   { name: 'customers:manage', description: 'Can manage customer accounts and company credit' },
+  { name: 'settings:manage_payments', description: 'Can manage payment methods' }, // <-- NEW PERMISSION
 ];
 
 async function main() {
@@ -25,15 +25,13 @@ async function main() {
   await prisma.user.deleteMany({});
   await prisma.role.deleteMany({});
   await prisma.permission.deleteMany({});
-  // --- NEW: Clear customer data too ---
   await prisma.customer.deleteMany({});
   await prisma.company.deleteMany({});
-  // --- END NEW ---
-  console.log('Cleared existing users, roles, permissions, customers, and companies.');
+  await prisma.paymentMethod.deleteMany({}); // <-- NEW: Clear payment methods
+  console.log('Cleared existing users, roles, permissions, customers, companies, and payment methods.');
 
   // --- Create all permissions ---
   for (const p of permissions) {
-    // Use upsert to avoid errors if run multiple times, though deleteMany should handle it
     await prisma.permission.upsert({
         where: { name: p.name },
         update: {},
@@ -52,7 +50,7 @@ async function main() {
   const cashierPermissionIds = cashierPermissions.map(p => ({ id: p.id }));
 
   const managerPermissions = await prisma.permission.findMany({
-    // Manager gets everything except role management (will include settings:manage_pos now)
+    // Manager gets everything except role management
     where: { name: { not: 'settings:manage_roles' } }
   });
   const managerPermissionIds = managerPermissions.map(p => ({ id: p.id }));
@@ -60,7 +58,7 @@ async function main() {
   // Admin Role - gets all permissions
   const adminRole = await prisma.role.upsert({
     where: { name: 'Admin' },
-    update: { permissions: { set: allPermissionIds } }, // Ensure it has all current permissions
+    update: { permissions: { set: allPermissionIds } }, 
     create: {
       name: 'Admin',
       permissions: { connect: allPermissionIds },
@@ -89,11 +87,40 @@ async function main() {
     },
   });
   console.log('Created/Updated "Cashier" role with limited permissions.');
+  
+  // --- MODIFIED: Create Default Payment Methods (Removed Credit, Added color/icon) ---
+  const defaultMethods = [
+      { name: 'Cash', displayOrder: 1, isActive: true, color: 'green', icon: 'IconCash' }, 
+      { name: 'Card', displayOrder: 2, color: 'blue', icon: 'IconCreditCard' },
+      { name: 'Wallet', displayOrder: 3, color: 'grape', icon: 'IconWallet' },
+      { name: 'Bank Transfer', displayOrder: 4, color: 'cyan', icon: 'IconBuildingBank' },
+      // Credit is intentionally excluded to prevent it appearing as a full payment option.
+  ];
+
+  for (const method of defaultMethods) {
+      await prisma.paymentMethod.upsert({
+          where: { name: method.name },
+          update: { 
+              isActive: method.isActive !== undefined ? method.isActive : true, 
+              displayOrder: method.displayOrder,
+              color: method.color,
+              icon: method.icon,
+          },
+          create: { 
+              name: method.name, 
+              isActive: method.isActive !== undefined ? method.isActive : true, 
+              displayOrder: method.displayOrder,
+              color: method.color,
+              icon: method.icon,
+          },
+      });
+  }
+  console.log('Created default payment methods.');
+  // --- END MODIFIED ---
 
   // --- Create default users and assign them roles ---
-  // Use upsert for users too, updating roleId if they exist
   await prisma.user.upsert({
-    where: { id: 1 }, // Assuming Admin might have ID 1, adjust if needed or use a unique field like name if defined
+    where: { id: 1 }, 
     update: { roleId: adminRole.id },
     create: {
       name: 'Admin',
@@ -105,7 +132,7 @@ async function main() {
   console.log('Created/Updated default Admin user with PIN 1234.');
 
   await prisma.user.upsert({
-     where: { id: 2 }, // Assuming Cashier might have ID 2
+     where: { id: 2 }, 
      update: { roleId: cashierRole.id },
      create: {
       name: 'Cashier',

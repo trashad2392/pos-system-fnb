@@ -21,6 +21,7 @@ export default function PosPage() {
     discountTarget, discountModalOpened,
     selectedPaymentMethods,
     paymentModalInitialTab,
+    paymentMethods, // <-- NEW: Destructure paymentMethods from hook
     actions
   } = usePosLogic();
 
@@ -65,8 +66,6 @@ export default function PosPage() {
   }
 
   return (
-    // 🛑 REVERT: Minimal wrapper. The vertical scroll issue is now definitively 
-    // located in the 100px calculation or global browser margins/padding.
     <div style={{ position: 'relative' }}>
       {renderView()}
 
@@ -83,6 +82,7 @@ export default function PosPage() {
         onClose={actions.closePaymentModal}
         onSelectPayment={actions.handleSelectPayment}
         initialTab={paymentModalInitialTab}
+        paymentMethods={paymentMethods} // <-- NEW PROP
       />
 
       <HeldOrdersModal

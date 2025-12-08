@@ -169,7 +169,6 @@ function setupOrderHandlers() {
 
       // --- MODIFIED VOID LOGIC ---
       // We must recalculate the total *before* this item was voided
-      // to see how much the order-level discount was worth.
       
       // 1. Get the current order total
       const originalOrderTotal = orderItemToVoid.order.totalAmount;
@@ -504,8 +503,13 @@ function setupOrderHandlers() {
                 //    is logged on the customer's balance.
             } else {
                 // --- STANDARD PAYMENT LOGIC (Non-Credit Sale) ---
+                // We only create payment records if the order is NOT a credit sale.
+                // NOTE: This logic assumes 'payments' array will NOT contain a 'Credit' method
+                // if customerId is null, and vice-versa, as enforced by the frontend logic.
+                const nonCreditPayments = payments.filter(p => p.method !== 'Credit');
+                
                 await tx.payment.createMany({
-                    data: payments.map(p => ({
+                    data: nonCreditPayments.map(p => ({
                         amount: p.amount,
                         method: p.method,
                         orderId: orderId,

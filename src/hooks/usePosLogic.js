@@ -22,7 +22,7 @@ function usePrevious(value) {
 
 export function usePosLogic() {
   const {
-    tables, fullActiveMenuData, posSettings, discounts,
+    tables, fullActiveMenuData, posSettings, discounts, paymentMethods, // <-- ADDED paymentMethods
     isLoading, error, refreshData
   } = usePosData();
 
@@ -345,11 +345,11 @@ export function usePosLogic() {
   // --- RETURN VALUE ---
   return {
     // States
-    posView, activeOrder, tables, menu: currentDisplayMenu, heldOrders, discounts, isLoading, error, selectedItemId,
+    posView, activeOrder, tables, menu: currentDisplayMenu, heldOrders, discounts, paymentMethods, // <-- EXPOSED paymentMethods
+    isLoading, error, selectedItemId,
     selectedPaymentMethods,
     paymentSelectionType,
     splitPaymentRequiresReconfirm,
-    // --- EXPOSE CUSTOMER ID STATE ---
     creditSaleCustomerId,
 
     // Modal States

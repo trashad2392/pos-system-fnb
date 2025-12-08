@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   // Image Upload
   uploadImage: () => ipcRenderer.invoke('upload-image'),
+  // 🔥 FIX: ADDED saveIconImage to expose it to the renderer
+  saveIconImage: (data) => ipcRenderer.invoke('save-icon-image', data), 
 
   // Product Functions
   getProducts: () => ipcRenderer.invoke('get-products'),
@@ -28,7 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   holdOrder: (data) => ipcRenderer.invoke('hold-order', data),
   getHeldOrders: (data) => ipcRenderer.invoke('get-held-orders', data),
   resumeHeldOrder: (data) => ipcRenderer.invoke('resume-held-order', data),
-  deleteHeldOrder: (data) => ipcRenderer.invoke('delete-held-order', data),
+  deleteHeldOrder: (data) => ipcRenderer.invoke('delete-held-orders', data),
   clearOrder: (data) => ipcRenderer.invoke('clear-order', data),
   updateItemComment: (data) => ipcRenderer.invoke('update-item-comment', data),
   updateOrderComment: (data) => ipcRenderer.invoke('update-order-comment', data),
@@ -96,27 +98,28 @@ contextBridge.exposeInMainWorld('api', {
   setPosSetting: (data) => ipcRenderer.invoke('set-pos-setting', data), // Expects { key, value }
   setPosSettings: (settingsMap) => ipcRenderer.invoke('set-pos-settings', settingsMap), // Expects { key1: value1, ... }
 
-  // --- NEW: Customer & Company Functions (Credit Sale) ---
+  // --- NEW: Payment Method Functions ---
+  getPaymentMethods: (options) => ipcRenderer.invoke('get-payment-methods', options),
+  addPaymentMethod: (data) => ipcRenderer.invoke('add-payment-method', data),
+  updatePaymentMethod: (data) => ipcRenderer.invoke('update-payment-method', data),
+  deletePaymentMethod: (id) => ipcRenderer.invoke('delete-payment-method', id),
+  // --- END NEW ---
+
+  // Customer & Company Functions (Credit Sale)
   getCompanies: () => ipcRenderer.invoke('get-companies'),
   addCompany: (data) => ipcRenderer.invoke('add-company', data),
   updateCompany: (data) => ipcRenderer.invoke('update-company', data),
   getCustomers: () => ipcRenderer.invoke('get-customers'),
   addCustomer: (data) => ipcRenderer.invoke('add-customer', data),
   updateCustomer: (data) => ipcRenderer.invoke('update-customer', data),
-  deleteCustomer: (id) => ipcRenderer.invoke('delete-customer', id), // <-- ADDED
+  deleteCustomer: (id) => ipcRenderer.invoke('delete-customer', id), 
   addCustomerPayment: (data) => ipcRenderer.invoke('add-customer-payment', data), // { customerId, amount, method }
   getCustomerCreditStatus: (customerId) => ipcRenderer.invoke('get-customer-credit-status', customerId),
-  // --- END NEW ---
 
-  // --- START: MODIFIED PRINTING FUNCTIONS ---
+  // Printing Functions
   printReceipt: (orderId) => ipcRenderer.invoke('print-receipt', orderId),
   triggerPrintDialog: () => ipcRenderer.send('trigger-print-dialog'),
-  
-  // This is the new function to "pull" the data
   getReceiptData: () => ipcRenderer.invoke('get-receipt-data'),
-  
-  // These are no longer used by page.js, but we'll leave them for now
   onReceiptData: (callback) => ipcRenderer.on('receipt-data', (e, ...args) => callback(...args)),
   clearReceiptDataListener: () => ipcRenderer.removeAllListeners('receipt-data'),
-  // --- END: MODIFIED PRINTING FUNCTIONS ---
 });

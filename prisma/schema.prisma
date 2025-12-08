@@ -33,6 +33,17 @@ model Customer {
 }
 // --- END NEW CUSTOMER MODELS ---
 
+// --- NEW: Payment Method Model (MODIFIED to include optional color/icon) ---
+model PaymentMethod {
+  id           Int        @id @default(autoincrement())
+  name         String     @unique
+  isActive     Boolean    @default(true)
+  displayOrder Int        @default(0)
+  color        String?    // <--- TEMPORARY FIX: Added ?
+  icon         String?    // <--- TEMPORARY FIX: Added ?
+}
+// --- END NEW Payment Method Model ---
+
 
 // --- NEW: Menu Model ---
 model Menu {
@@ -170,10 +181,10 @@ model Payment {
   amount    Float
   method    String
   createdAt DateTime @default(now())
-  orderId   Int? // <-- CHANGED TO OPTIONAL (Int?)
-  order     Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade) // Changed to optional (Order?)
+  orderId   Int?      // <-- CHANGED TO OPTIONAL (Int?)
+  order     Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade) // Changed to optional (Order?)
   // --- ADDED FIELD ---
-  customerId Int? // For payments made to reduce an account balance, not necessarily tied to an order
+  customerId Int?      // For payments made to reduce an account balance, not necessarily tied to an order
   customer   Customer? @relation(fields: [customerId], references: [id])
   // --- END ADDED FIELD ---
 }
@@ -190,7 +201,7 @@ model OrderItem {
   comment            String?
   status             String              @default("ACTIVE") // "ACTIVE" or "VOIDED"
   voidedAt           DateTime?
-  voidType           String? // "SHORT" or "LONG"
+  voidType           String?             // "SHORT" or "LONG"
   discountId         Int?
   discount           Discount?           @relation(fields: [discountId], references: [id])
 }
@@ -234,5 +245,3 @@ model Shift {
   userId   Int
   user     User      @relation(fields: [userId], references: [id])
 }
-
-// NOTE: Implicit many-to-many relation table for Role and Permission is handled by Prisma
