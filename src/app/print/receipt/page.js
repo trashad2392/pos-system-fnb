@@ -1,11 +1,10 @@
 // src/app/print/receipt/page.js
 "use client";
 
-import { useState, useEffect, Fragment, useRef } from 'react'; // <-- ADDED useRef
+import { useState, useEffect, Fragment, useRef } from 'react';
 import { Box, Text, Title, Group, Divider, Center, Loader } from '@mantine/core';
 import './receipt.css'; 
 
-// A simple component to handle client-side date formatting
 function ClientDateTime({ date }) {
   const [formatted, setFormatted] = useState('');
   useEffect(() => {
@@ -18,47 +17,50 @@ function ClientDateTime({ date }) {
 
 export default function ReceiptPage() {
   const [order, setOrder] = useState(null);
+  const [settings, setSettings] = useState({
+    currency_symbol: 'EGP',
+    tax_label: 'VAT',
+    tax_rate: 14,
+    tax_inclusive: true
+  });
   const [error, setError] = useState(null);
-  const printInitiatedRef = useRef(false); // <-- CHANGED to useRef
+  const printInitiatedRef = useRef(false);
 
   useEffect(() => {
-    // --- START: MODIFIED LOGIC (PULL DATA) ---
     const fetchReceiptData = async () => {
       try {
-        // Wait a tiny moment to ensure preload.js has injected the API
         await new Promise(resolve => setTimeout(resolve, 50));
 
         if (!window.api || typeof window.api.getReceiptData !== 'function') {
-          console.error("window.api.getReceiptData is not available.");
           setError("API is not available. Cannot fetch data.");
           return;
         }
 
-        console.log("Receipt page mounted. Calling window.api.getReceiptData()...");
-        const orderData = await window.api.getReceiptData();
+        // Fetch Order Data and General Settings simultaneously
+        const [orderData, posSettings] = await Promise.all([
+          window.api.getReceiptData(),
+          window.api.getPosSettings()
+        ]);
+
+        if (posSettings) {
+          setSettings({
+            currency_symbol: posSettings.currency_symbol || 'EGP',
+            tax_label: posSettings.tax_label || 'VAT',
+            tax_rate: posSettings.tax_rate !== undefined ? parseFloat(posSettings.tax_rate) : 14,
+            tax_inclusive: posSettings.tax_inclusive !== undefined ? posSettings.tax_inclusive === 'true' : true,
+          });
+        }
 
         if (orderData) {
-          console.log("Receipt data received!", orderData);
           setOrder(orderData);
           
-          // Wait a brief moment for React to render the new state
-          // Then, tell the main process to open the print dialog
           setTimeout(() => {
-            // --- UPDATED GUARD LOGIC ---
-            // We check the mutable ref value and set it immediately if we proceed.
             if (!printInitiatedRef.current && window.api && typeof window.api.triggerPrintDialog === 'function') { 
-              console.log("Triggering print dialog...");
               window.api.triggerPrintDialog();
-              printInitiatedRef.current = true; // <-- Set flag on ref
-            } else if (printInitiatedRef.current) {
-                 console.log("Print already initiated. Skipping.");
-            } else {
-              console.error("window.api.triggerPrintDialog is not available.");
+              printInitiatedRef.current = true;
             }
-            // --- END UPDATED GUARD LOGIC ---
-          }, 250); // 250ms delay to ensure DOM is updated
+          }, 500); // Increased delay slightly to ensure settings are rendered
         } else {
-          console.error("Received null or undefined data from getReceiptData.");
           setError("Failed to retrieve receipt data.");
         }
       } catch (err) {
@@ -68,8 +70,7 @@ export default function ReceiptPage() {
     };
 
     fetchReceiptData();
-    // --- END: MODIFIED LOGIC ---
-  }, []); // Empty dependency array ensures this runs once on mount
+  }, []);
 
   if (error) {
      return (
@@ -86,7 +87,7 @@ export default function ReceiptPage() {
     return (
       <Center className="receipt-container" style={{ height: '100vh', boxSizing: 'border-box' }}>
         <Loader />
-        <Text ml="sm">Waiting for order data...</Text>
+        <Text ml="sm">Waiting for data...</Text>
       </Center>
     );
   }
@@ -100,13 +101,32 @@ export default function ReceiptPage() {
     items,
     payments,
     discount,
-    subtotal, // This is the pre-order-discount subtotal
-    totalAmount, // This is the final amount charged
-    refundAmount, // Amount refunded from voids
+    subtotal,
+    totalAmount,
+    refundAmount,
   } = order;
 
-  // Calculate discount amount based on subtotal and final total
+  // Calculate Order Discount
   const orderDiscountAmount = (discount && subtotal > totalAmount) ? (subtotal - totalAmount) : 0;
+
+  // TAX CALCULATIONS
+  let displaySubtotal = totalAmount; // Default for Inclusive
+  let taxAmount = 0;
+
+  if (settings.tax_inclusive) {
+    // If tax is inclusive, the totalAmount already has the tax.
+    // Formula: Tax = Total - (Total / (1 + Rate))
+    taxAmount = totalAmount - (totalAmount / (1 + (settings.tax_rate / 100)));
+    displaySubtotal = totalAmount - taxAmount; // Show subtotal before tax
+  } else {
+    // If tax is exclusive, the tax is added on top of the subtotal (which is totalAmount in your current logic)
+    // Note: Assuming totalAmount passed from POS already includes item discounts but NOT exclusive tax
+    taxAmount = totalAmount * (settings.tax_rate / 100);
+    displaySubtotal = totalAmount;
+  }
+
+  const finalTotal = displaySubtotal + taxAmount;
+  const currency = settings.currency_symbol;
 
   return (
     <Box className="receipt-container">
@@ -121,7 +141,7 @@ export default function ReceiptPage() {
       
       <Divider my="sm" variant="dashed" />
 
-      {/* Items */}
+      {/* Items Mapping */}
       <Box>
         {items.map(item => {
           const isVoided = item.status === 'VOIDED';
@@ -137,7 +157,7 @@ export default function ReceiptPage() {
           if (item.discount) {
              if (item.discount.type === 'PERCENT') {
                 itemPrice *= (1 - item.discount.value / 100);
-             } else { // FIXED
+             } else {
                 itemPrice -= item.discount.value;
              }
           }
@@ -149,26 +169,24 @@ export default function ReceiptPage() {
               <Group justify="space-between" wrap="nowrap" gap="xs" className={isVoided ? 'voided-item' : ''}>
                 <Text className="item-name">{item.quantity} x {item.product.name}</Text>
                 <Text className="item-price">
-                  {isVoided ? `(VOIDED)` : `$${finalItemTotal.toFixed(2)}`}
+                  {isVoided ? `(VOIDED)` : `${currency} ${finalItemTotal.toFixed(2)}`}
                 </Text>
               </Group>
               
-              {item.selectedModifiers.length > 0 && (
-                <Box className={`modifiers-list ${isVoided ? 'voided-item' : ''}`}>
-                  {item.selectedModifiers.map(mod => (
-                    <Group key={mod.id} justify="space-between" wrap="nowrap" gap="xs">
-                      <Text className="modifier-name">
-                        &nbsp;&nbsp;&bull; {mod.modifierOption.name} {mod.quantity > 1 ? `(x${mod.quantity})` : ''}
+              {item.selectedModifiers.map(mod => (
+                <Box key={mod.id} className={`modifiers-list ${isVoided ? 'voided-item' : ''}`}>
+                  <Group justify="space-between" wrap="nowrap" gap="xs">
+                    <Text className="modifier-name">
+                      &nbsp;&nbsp;&bull; {mod.modifierOption.name} {mod.quantity > 1 ? `(x${mod.quantity})` : ''}
+                    </Text>
+                    {mod.modifierOption.priceAdjustment > 0 && (
+                      <Text className="modifier-price">
+                        +{currency} {(mod.modifierOption.priceAdjustment * mod.quantity).toFixed(2)}
                       </Text>
-                      {mod.modifierOption.priceAdjustment > 0 && (
-                        <Text className="modifier-price">
-                          +${(mod.modifierOption.priceAdjustment * mod.quantity).toFixed(2)}
-                        </Text>
-                      )}
-                    </Group>
-                  ))}
+                    )}
+                  </Group>
                 </Box>
-              )}
+              ))}
             </Fragment>
           );
         })}
@@ -176,29 +194,35 @@ export default function ReceiptPage() {
 
       <Divider my="sm" variant="dashed" />
 
-      {/* Totals */}
+      {/* Totals Section */}
       <Group justify="space-between">
-        <Text>Subtotal:</Text>
-        <Text>${subtotal.toFixed(2)}</Text>
+        <Text>Subtotal (excl. {settings.tax_label}):</Text>
+        <Text>{currency} {displaySubtotal.toFixed(2)}</Text>
       </Group>
-      {discount && (
+
+      <Group justify="space-between">
+        <Text>{settings.tax_label} ({settings.tax_rate}%):</Text>
+        <Text>{currency} {taxAmount.toFixed(2)}</Text>
+      </Group>
+
+      {orderDiscountAmount > 0 && (
         <Group justify="space-between">
-          <Text>Order Discount ({discount.name}):</Text>
-          <Text c="red">-${orderDiscountAmount.toFixed(2)}</Text>
+          <Text>Order Discount:</Text>
+          <Text c="red">-{currency} {orderDiscountAmount.toFixed(2)}</Text>
         </Group>
       )}
+
       <Group justify="space-between" mt="xs">
         <Title order={5}>Total:</Title>
-        <Title order={5}>${totalAmount.toFixed(2)}</Title>
+        <Title order={5}>{currency} {finalTotal.toFixed(2)}</Title>
       </Group>
       
       {refundAmount > 0 && (
          <Group justify="space-between" mt="xs">
             <Title order={5} c="red">Refunded:</Title>
-            <Title order={5} c="red">-${refundAmount.toFixed(2)}</Title>
+            <Title order={5} c="red">-{currency} {refundAmount.toFixed(2)}</Title>
          </Group>
       )}
-
 
       <Divider my="sm" variant="dashed" />
 
@@ -207,7 +231,7 @@ export default function ReceiptPage() {
       {payments.map((p, index) => (
         <Group key={index} justify="space-between">
           <Text>{p.method}:</Text>
-          <Text>${p.amount.toFixed(2)}</Text>
+          <Text>{currency} {p.amount.toFixed(2)}</Text>
         </Group>
       ))}
       

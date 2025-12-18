@@ -2,36 +2,36 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Title, Text, Center, Tabs, Loader } from '@mantine/core'; // Added Loader
+import { Title, Text, Center, Tabs, Loader } from '@mantine/core';
 import { useAuth } from '@/context/AuthContext';
 import UserManager from '@/components/management/UserManager';
 import RoleManager from '@/components/management/RoleManager';
-import PaymentMethodManager from '@/components/management/PaymentMethodManager'; // <-- NEW IMPORT
+import PaymentMethodManager from '@/components/management/PaymentMethodManager';
+import GeneralSettingsManager from '@/components/management/GeneralSettingsManager'; // Added for General Settings
 
 // Define permission keys
 const MANAGE_USERS_PERMISSION = 'settings:manage_users';
 const MANAGE_ROLES_PERMISSION = 'settings:manage_roles';
-const MANAGE_PAYMENTS_PERMISSION = 'settings:manage_payments'; // <-- NEW PERMISSION
+const MANAGE_PAYMENTS_PERMISSION = 'settings:manage_payments';
+const MANAGE_GENERAL_PERMISSION = 'settings:manage_general'; // New Permission
 
 export default function SettingsPage() {
   const { hasPermission } = useAuth();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
-  const [isLoading, setIsLoading] = useState(true); // <-- Add loading state
+  const [isLoading, setIsLoading] = useState(true);
 
   // Determine permissions once
   const canManageUsers = hasPermission(MANAGE_USERS_PERMISSION);
   const canManageRoles = hasPermission(MANAGE_ROLES_PERMISSION);
-  // --- NEW PERMISSION CHECK ---
   const canManagePaymentMethods = hasPermission(MANAGE_PAYMENTS_PERMISSION); 
-  // --- END NEW PERMISSION CHECK ---
+  const canManageGeneral = hasPermission(MANAGE_GENERAL_PERMISSION); // New check
   
   const fetchData = async () => {
     setIsLoading(true);
-    // Fetch data only if relevant permissions exist
+    // Fetch data only if relevant permissions exist for users or roles
     if (canManageUsers || canManageRoles) {
       try {
-        // Fetch users and roles only if needed for those tabs
         const promises = [];
         if (canManageUsers) promises.push(window.api.getUsers()); else promises.push(Promise.resolve([])); 
         if (canManageRoles || canManageUsers) promises.push(window.api.getRoles()); else promises.push(Promise.resolve([])); 
@@ -47,13 +47,12 @@ export default function SettingsPage() {
     setIsLoading(false);
   };
 
-  // Refetch data if permissions change (though unlikely without reload)
   useEffect(() => {
     fetchData();
   }, [canManageUsers, canManageRoles]); 
 
-  // If user has none of the required permissions for *this* page, deny access.
-  if (!canManageUsers && !canManageRoles && !canManagePaymentMethods) { // <-- MODIFIED check
+  // Deny access if user has no settings permissions at all
+  if (!canManageUsers && !canManageRoles && !canManagePaymentMethods && !canManageGeneral) {
     return (
       <Center style={{ height: '50vh' }}>
         <Text c="red" fw={500}>You do not have permission to view this page.</Text>
@@ -69,19 +68,25 @@ export default function SettingsPage() {
     );
    }
 
-  // Determine the default tab based on permissions
-  const defaultTab = canManageUsers ? 'users' : (canManageRoles ? 'roles' : 'payment-methods'); // <-- MODIFIED default tab logic
+  // Determine the default tab based on priority
+  const defaultTab = canManageGeneral ? 'general' : (canManageUsers ? 'users' : (canManageRoles ? 'roles' : 'payment-methods'));
 
   return (
     <div>
       <Title order={1} mb="xl">Settings</Title>
       <Tabs defaultValue={defaultTab}>
         <Tabs.List>
+          {canManageGeneral && <Tabs.Tab value="general">General</Tabs.Tab>}
           {canManageUsers && <Tabs.Tab value="users">Manage Staff</Tabs.Tab>}
           {canManageRoles && <Tabs.Tab value="roles">Manage Roles</Tabs.Tab>}
-          {/* --- NEW TAB --- */}
           {canManagePaymentMethods && <Tabs.Tab value="payment-methods">Payment Methods</Tabs.Tab>} 
         </Tabs.List>
+
+        {canManageGeneral && (
+          <Tabs.Panel value="general" pt="md">
+            <GeneralSettingsManager />
+          </Tabs.Panel>
+        )}
 
         {canManageUsers && (
           <Tabs.Panel value="users" pt="md">
@@ -95,15 +100,11 @@ export default function SettingsPage() {
           </Tabs.Panel>
         )}
         
-        {/* --- NEW PANEL --- */}
         {canManagePaymentMethods && (
           <Tabs.Panel value="payment-methods" pt="md">
-            {/* PaymentMethodManager fetches its own data */}
             <PaymentMethodManager />
           </Tabs.Panel>
         )}
-        {/* --- END NEW PANEL --- */}
-
       </Tabs>
     </div>
   );
