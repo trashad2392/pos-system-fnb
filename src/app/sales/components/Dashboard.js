@@ -43,7 +43,7 @@ function StatCard({ title, value, icon: Icon, comparison }) {
   );
 }
 
-export default function Dashboard({ stats, comparisonStats, chartData, dateRange, onDateChange }) {
+export default function Dashboard({ stats, comparisonStats, chartData, dateRange, onDateChange, currencySymbol }) {
   if (!stats) {
     return <Text>Loading stats...</Text>;
   }
@@ -65,7 +65,7 @@ export default function Dashboard({ stats, comparisonStats, chartData, dateRange
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} mb="xl">
         <StatCard
           title="Total Revenue"
-          value={`$${stats.totalRevenue.toFixed(2)}`}
+          value={`${currencySymbol}${stats.totalRevenue.toFixed(2)}`} // Dynamic currency
           icon={IconCash}
           comparison={<ComparisonBadge current={stats.totalRevenue} previous={comparisonStats.totalRevenue} />}
         />
@@ -75,27 +75,28 @@ export default function Dashboard({ stats, comparisonStats, chartData, dateRange
           icon={IconReceipt}
           comparison={<ComparisonBadge current={stats.totalSales} previous={comparisonStats.totalSales} />}
         />
-        <StatCard title="Average Sale Value" value={`$${stats.averageSaleValue.toFixed(2)}`} icon={IconChartBar} />
+        <StatCard 
+          title="Average Sale Value" 
+          value={`${currencySymbol}${stats.averageSaleValue.toFixed(2)}`} // Dynamic currency
+          icon={IconChartBar} 
+        />
         <StatCard title="Best Seller" value={`${stats.bestSellingItem.name} (x${stats.bestSellingItem.quantity})`} icon={IconTrophy} />
       </SimpleGrid>
 
       <Title order={3} mb="md">Sales Over Time</Title>
       
-      {/* --- START OF CHANGES --- */}
       <Box style={{ height: '400px', width: '100%' }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" />
             <YAxis />
-            <Tooltip formatter={(value) => `$${value}`} />
+            <Tooltip formatter={(value) => `${currencySymbol}${value}`} /> {/* Chart tooltip */}
             <Legend />
             <Bar dataKey="total" fill="var(--mantine-color-blue-6)" name="Revenue" />
           </BarChart>
         </ResponsiveContainer>
       </Box>
-      {/* --- END OF CHANGES --- */}
-
     </div>
   );
 }

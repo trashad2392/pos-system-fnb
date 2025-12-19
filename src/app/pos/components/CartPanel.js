@@ -34,36 +34,29 @@ export default function CartPanel({
   onSelectItem,
   onRemoveItem,
   calculateItemTotal,
+  currencySymbol = '$', // Added prop with default fallback
 }) {
   const scrollComponentRef = useRef(null); 
   const viewportElementRef = useRef(null); 
 
   const scrollCart = (direction) => {
-    
     const scrollComponent = scrollComponentRef.current;
     const scrollElement = viewportElementRef.current; 
 
-    // Execute immediately since refs are stable and working
     if (scrollComponent && scrollElement) {
-      
-        const scrollStep = 150; // 🛑 SCROLL STEP REDUCED FOR SMOOTHER MOVEMENT
+        const scrollStep = 150; 
         const currentScrollTop = scrollElement.scrollTop;
         const maxScroll = scrollElement.scrollHeight - scrollElement.clientHeight;
         let newScrollTop;
 
-        // Calculate the new scroll position
         if (direction === 'up') {
             newScrollTop = Math.max(0, currentScrollTop - scrollStep);
         } else {
             newScrollTop = Math.min(maxScroll, currentScrollTop + scrollStep);
         }
 
-        // Only execute scroll if a change in position is required
         if (newScrollTop !== currentScrollTop) {
-            
-            // Direct assignment to native DOM scrollTop property
             scrollElement.scrollTop = newScrollTop; 
-
             console.log(`[Cart Scroll SUCCESS] Scrolling ${direction} from ${currentScrollTop.toFixed(0)} to ${newScrollTop.toFixed(0)}`);
         } else {
              console.warn(`[Cart Scroll BLOCKED] Already at the ${direction === 'up' ? 'top' : 'bottom'} boundary.`);
@@ -72,10 +65,8 @@ export default function CartPanel({
   };
 
   return (
-    // Outer container fills 100% of the fixed height space provided by OrderView
     <Paper withBorder p="xs" style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       
-      {/* Header with Scroll Up Button - Fixed Height */}
       <Group justify="space-between" px="xs" pt="xs" pb={4} style={{ flexShrink: 0 }}>
         <Text fw={700} size="sm">Cart Items</Text>
         <ScrollButton 
@@ -85,21 +76,19 @@ export default function CartPanel({
         />
       </Group>
       
-      {/* Scroll Area: Core scrollable content - Conditional Render */}
       {!isCartEmpty ? (
         <ScrollArea 
           ref={scrollComponentRef} 
-          viewportRef={viewportElementRef} // Assign direct viewport ref
+          viewportRef={viewportElementRef} 
           style={{ 
               flex: 1,                 
               minHeight: 0,            
               position: 'relative', 
               padding: '0 4px' 
           }}
-          scrollbarSize={0} // HIDES NATIVE SCROLLBAR
+          scrollbarSize={0} 
         >
           <Box>
-            {/* Order Note */}
             {order?.comment && (
               <Paper withBorder p="xs" mb="xs" shadow="xs" bg="blue.0">
                 <Group gap="xs">
@@ -111,7 +100,6 @@ export default function CartPanel({
               </Paper>
             )}
 
-            {/* Items */}
             {order.items.map(item => {
               const itemTotal = calculateItemTotal(item);
               let discountedItemTotal = itemTotal;
@@ -155,11 +143,11 @@ export default function CartPanel({
                       <Text size="md" fw={700}>x{item.quantity}</Text>
                       {item.discount ? (
                         <Group gap={4}>
-                            <Text td="line-through" c="dimmed" size="sm">${itemTotal.toFixed(2)}</Text>
-                            <Text fw={600}>${discountedItemTotal.toFixed(2)}</Text>
+                            <Text td="line-through" c="dimmed" size="sm">{currencySymbol}{itemTotal.toFixed(2)}</Text>
+                            <Text fw={600}>{currencySymbol}{discountedItemTotal.toFixed(2)}</Text>
                         </Group>
                       ) : (
-                        <Text fw={600}>${itemTotal.toFixed(2)}</Text>
+                        <Text fw={600}>{currencySymbol}{itemTotal.toFixed(2)}</Text>
                       )}
                     </Group>
                   </Paper>
@@ -169,11 +157,9 @@ export default function CartPanel({
           </Box>
         </ScrollArea>
       ) : (
-        // Placeholder when empty
         <Center style={{ flex: 1 }}><Text c="dimmed">Empty</Text></Center>
       )}
 
-      {/* Footer with Scroll Down Button - Fixed Height */}
       <Group justify="flex-end" px="xs" pt={4} pb="xs" style={{ flexShrink: 0 }}>
         <ScrollButton 
             icon={IconChevronDown} 

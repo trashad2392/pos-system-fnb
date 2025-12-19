@@ -14,11 +14,11 @@ const initialDiscountState = {
   name: '',
   type: 'PERCENT',
   value: 0,
-  minimumOrderAmount: 0, // This is the field we added
+  minimumOrderAmount: 0,
   isActive: true,
 };
 
-export default function DiscountManager({ discounts, onDataChanged }) {
+export default function DiscountManager({ discounts, onDataChanged, currencySymbol = '$ ' }) {
   const [opened, { open, close }] = useDisclosure(false);
   const [editingDiscount, setEditingDiscount] = useState(initialDiscountState);
 
@@ -43,7 +43,7 @@ export default function DiscountManager({ discounts, onDataChanged }) {
         name: editingDiscount.name,
         type: editingDiscount.type,
         value: parseFloat(editingDiscount.value) || 0,
-        minimumOrderAmount: parseFloat(editingDiscount.minimumOrderAmount) || 0, // This is the field we added
+        minimumOrderAmount: parseFloat(editingDiscount.minimumOrderAmount) || 0,
         isActive: editingDiscount.isActive,
       };
 
@@ -91,15 +91,18 @@ export default function DiscountManager({ discounts, onDataChanged }) {
           mt="md"
           label="Discount Type"
           required
-          data={[{ value: 'PERCENT', label: 'Percentage (%)' }, { value: 'FIXED', label: 'Fixed Amount ($)' }]}
+          data={[
+            { value: 'PERCENT', label: 'Percentage (%)' }, 
+            { value: 'FIXED', label: `Fixed Amount (${currencySymbol.trim()})` }
+          ]}
           value={editingDiscount.type}
           onChange={(value) => setEditingDiscount({ ...editingDiscount, type: value })}
-          allowDeselect={false} // This was our bug fix
+          allowDeselect={false}
         />
         <NumberInput
           mt="md"
           label="Value"
-          description={editingDiscount.type === 'PERCENT' ? 'Enter a number like 15 for 15%' : 'Enter a dollar amount like 5.00'}
+          description={editingDiscount.type === 'PERCENT' ? 'Enter a number like 15 for 15%' : `Enter an amount like 5.00`}
           precision={2}
           min={0}
           required
@@ -108,7 +111,7 @@ export default function DiscountManager({ discounts, onDataChanged }) {
         />
         <NumberInput
           mt="md"
-          label="Minimum Order Amount (Optional)"
+          label={`Minimum Order Amount (Optional)`}
           description="The order subtotal must be this amount or higher for the discount to apply. (0 = no minimum)"
           precision={2}
           min={0}
@@ -136,25 +139,30 @@ export default function DiscountManager({ discounts, onDataChanged }) {
         </Group>
 
         <Table striped highlightOnHover withTableBorder>
-          {/* --- START: WHITESPACE FIX --- */}
-          <Table.Thead><Table.Tr>
+          <Table.Thead>
+            <Table.Tr>
               <Table.Th>Name</Table.Th>
               <Table.Th>Type</Table.Th>
               <Table.Th>Value</Table.Th>
               <Table.Th>Min. Order</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th>Actions</Table.Th>
-            </Table.Tr></Table.Thead>
+            </Table.Tr>
+          </Table.Thead>
           <Table.Tbody>{
             discounts.length > 0 ? (
               discounts.map((discount) => (
                 <Table.Tr key={discount.id}>
                   <Table.Td>{discount.name}</Table.Td>
                   <Table.Td>{discount.type}</Table.Td>
-                  <Table.Td>{discount.type === 'PERCENT' ? `${discount.value}%` : `$${discount.value.toFixed(2)}`}</Table.Td>
+                  <Table.Td>
+                    {discount.type === 'PERCENT' 
+                      ? `${discount.value}%` 
+                      : `${currencySymbol}${discount.value.toFixed(2)}`}
+                  </Table.Td>
                   <Table.Td>
                     {discount.minimumOrderAmount > 0
-                      ? `$${discount.minimumOrderAmount.toFixed(2)}`
+                      ? `${currencySymbol}${discount.minimumOrderAmount.toFixed(2)}`
                       : 'N/A'}
                   </Table.Td>
                   <Table.Td>
@@ -182,7 +190,6 @@ export default function DiscountManager({ discounts, onDataChanged }) {
               </Table.Tr>
             )
           }</Table.Tbody>
-          {/* --- END: WHITESPACE FIX --- */}
         </Table>
       </Paper>
     </>

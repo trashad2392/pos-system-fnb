@@ -1,4 +1,4 @@
-// src/app/inventory/page.js
+// src/app/management/page.js
 "use client";
 import { useState, useEffect, useMemo } from 'react';
 import { Title, Button, Group, Tabs, Center, Text } from '@mantine/core';
@@ -10,7 +10,7 @@ import TableManager from '@/components/management/TableManager';
 import DiscountManager from '@/components/management/DiscountManager';
 import MenuManager from '@/components/management/MenuManager';
 import MenuSettingsManager from '@/components/management/MenuSettingsManager';
-import CustomerManager from '@/components/management/CustomerManager'; // <-- ADDED IMPORT
+import CustomerManager from '@/components/management/CustomerManager';
 
 // Define the tab structure and permissions
 const managementTabs = [
@@ -22,15 +22,14 @@ const managementTabs = [
   { value: 'modifiers', label: 'Modifiers', permission: 'inventory:manage', component: ModifierManager },
   { value: 'tables', label: 'Tables', permission: 'inventory:manage', component: TableManager },
   { value: 'discounts', label: 'Discounts', permission: 'discounts:manage', component: DiscountManager },
-  // Credit Sale Customer Manager (Moved to end)
+  // Credit Sale Customer Manager
   { value: 'customers', label: 'Credit Sale Customers Manager', permission: 'customers:manage', component: CustomerManager },
 ];
-
 
 export default function InventoryPage() {
   const { hasPermission } = useAuth();
 
-  // Determine access permissions (used for initial gate and component rendering)
+  // Determine access permissions
   const canManageInventory = hasPermission('inventory:manage');
   const canManageDiscounts = hasPermission('discounts:manage');
   const canManagePosSettings = hasPermission('settings:manage_pos');
@@ -39,7 +38,6 @@ export default function InventoryPage() {
   // Filter tabs accessible to the current user
   const accessibleTabs = useMemo(() => {
     return managementTabs.filter(tab => {
-        // For inventory tabs, we lump them under the same check
         if (tab.permission === 'inventory:manage') return canManageInventory;
         if (tab.permission === 'discounts:manage') return canManageDiscounts;
         if (tab.permission === 'settings:manage_pos') return canManagePosSettings;
@@ -47,7 +45,6 @@ export default function InventoryPage() {
         return false;
     });
   }, [canManageInventory, canManageDiscounts, canManagePosSettings, canManageCustomers]);
-
 
   // If the user has access to neither section, then deny access to the whole page.
   if (accessibleTabs.length === 0) { 
@@ -58,7 +55,6 @@ export default function InventoryPage() {
     );
   }
 
-
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [rawCategories, setRawCategories] = useState([]);
@@ -66,45 +62,52 @@ export default function InventoryPage() {
   const [rawModifierGroups, setRawModifierGroups] = useState([]);
   const [tables, setTables] = useState([]);
   const [discounts, setDiscounts] = useState([]);
-  const [menus, setMenus] = useState([]); // <-- Add state for menus
+  const [menus, setMenus] = useState([]);
+  const [posSettings, setPosSettings] = useState(null); // Added state for settings
 
   const fetchData = async () => {
     try {
-      // Fetch all data in parallel
+      // Fetch all data in parallel, including POS settings
       const [
-        menuData, // <-- Fetch menus first
+        menuData,
         productData,
         categoryData,
         groupData,
         tableData,
-        discountData
+        discountData,
+        settingsData
       ] = await Promise.all([
-        window.api.getMenus(), // <-- Call getMenus
+        window.api.getMenus(),
         window.api.getProducts(),
         window.api.getCategories(),
         window.api.getModifierGroups(),
         window.api.getTables(),
         window.api.getDiscounts(),
+        window.api.getPosSettings(),
       ]);
 
-      setMenus(menuData); // <-- Set menus state
+      setMenus(menuData);
       setProducts(productData);
       setRawCategories(categoryData);
       // Format categories for Select dropdowns
       setCategories(categoryData.map(cat => ({
         value: cat.id.toString(),
-        label: `${cat.name} (${cat.menu?.name || 'No Menu'})` // <-- Include menu name in label
+        label: `${cat.name} (${cat.menu?.name || 'No Menu'})`
       })));
       setRawModifierGroups(groupData);
       // Format modifier groups for Select dropdowns
       setModifierGroups(groupData.map(g => ({ value: g.id.toString(), label: g.name })));
       setTables(tableData);
       setDiscounts(discountData);
+      setPosSettings(settingsData); // Store settings
 
     } catch (error) { console.error("Error fetching page data:", error); }
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // Format the currency symbol with a mandatory space
+  const currencySymbol = `${posSettings?.currency_symbol || '$'} `;
 
   const handleImportMenu = async () => {
     if (!window.confirm('This will wipe your existing menus and replace them. Are you sure?')) {
@@ -123,7 +126,7 @@ export default function InventoryPage() {
     }
   };
 
-  // Determine which tab should be active by default (use the first accessible tab)
+  // Determine which tab should be active by default
   const defaultTab = accessibleTabs[0]?.value || 'menus';
   
   return (
@@ -134,7 +137,6 @@ export default function InventoryPage() {
       </Group>
 
       <Tabs defaultValue={defaultTab}>
-        {/* Render Tabs.List using the ordered list */}
         <Tabs.List>
           {accessibleTabs.map(tab => (
             <Tabs.Tab key={tab.value} value={tab.value}>
@@ -143,14 +145,11 @@ export default function InventoryPage() {
           ))}
         </Tabs.List>
 
-        {/* Render Tabs.Panels based on the same ordered list */}
         {accessibleTabs.map(tab => {
-          const TabComponent = tab.component;
-          
           if (tab.value === 'customers') {
             return (
               <Tabs.Panel key={tab.value} value={tab.value} pt="md">
-                <CustomerManager />
+                <CustomerManager currencySymbol={currencySymbol} />
               </Tabs.Panel>
             );
           }
@@ -189,6 +188,7 @@ export default function InventoryPage() {
                   modifierGroups={modifierGroups}
                   menus={menus}
                   onDataChanged={fetchData}
+                  currencySymbol={currencySymbol}
                 />
               </Tabs.Panel>
             );
@@ -197,7 +197,7 @@ export default function InventoryPage() {
           if (tab.value === 'modifiers') {
             return (
               <Tabs.Panel key={tab.value} value={tab.value} pt="xs">
-                <ModifierManager modifierGroups={rawModifierGroups} onDataChanged={fetchData} />
+                <ModifierManager modifierGroups={rawModifierGroups} onDataChanged={fetchData} currencySymbol={currencySymbol} />
               </Tabs.Panel>
             );
           }
@@ -213,12 +213,12 @@ export default function InventoryPage() {
           if (tab.value === 'discounts') {
             return (
               <Tabs.Panel key={tab.value} value={tab.value} pt="xs">
-                <DiscountManager discounts={discounts} onDataChanged={fetchData} />
+                <DiscountManager discounts={discounts} onDataChanged={fetchData} currencySymbol={currencySymbol} />
               </Tabs.Panel>
             );
           }
           
-          return null; // Should not happen
+          return null;
         })}
       </Tabs>
     </div>

@@ -10,7 +10,7 @@ const ScrollButton = ({ icon: Icon, onClick, direction, ariaLabel }) => {
     return (
       <Button 
         onClick={onClick} 
-        variant="outline" // Use outline for borders
+        variant="outline" 
         size="sm"
         color="gray"
         p={0}
@@ -29,17 +29,15 @@ const ScrollButton = ({ icon: Icon, onClick, direction, ariaLabel }) => {
 // -----------------------------------------------------------
 
 
-export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
+export default function MenuPanel({ order, onBack, menu, onProductSelect, currencySymbol = '$' }) {
   const { categories, products } = menu;
   const [activeTab, setActiveTab] = useState(categories?.length > 0 ? categories[0].id.toString() : null);
 
-  // 🛑 FIX: Use separate refs for the component instance and the actual DOM viewport element
   const productScrollComponentRef = useRef(null); 
   const productViewportElementRef = useRef(null); 
   
   const tabsScrollRef = useRef(null); 
 
-  // Set the default active tab on initial load
   useEffect(() => {
     if (categories.length > 0 && !activeTab) {
       setActiveTab(categories[0].id.toString());
@@ -47,16 +45,12 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
   }, [categories, activeTab]);
 
 
-  // Custom scroll logic for the vertical product grid
   const scrollProducts = (direction) => {
-    
     const scrollComponent = productScrollComponentRef.current;
-    const scrollElement = productViewportElementRef.current; // Direct access to the DOM viewport
+    const scrollElement = productViewportElementRef.current; 
 
-    // Execute immediately since refs are stable and working
     if (scrollComponent && scrollElement) {
-      
-      const scrollStep = 150; // Use the smoother, item-aligned scroll step
+      const scrollStep = 150; 
       const currentScrollTop = scrollElement.scrollTop;
       const maxScroll = scrollElement.scrollHeight - scrollElement.clientHeight;
       let newScrollTop;
@@ -67,9 +61,7 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
         newScrollTop = Math.min(maxScroll, currentScrollTop + scrollStep);
       }
       
-      // Execute scroll only if position changes
       if (newScrollTop !== currentScrollTop) {
-        // 🛑 CRITICAL FIX: Direct assignment to native DOM scrollTop property
         scrollElement.scrollTop = newScrollTop; 
         console.log(`[Product Scroll SUCCESS] Scrolling ${direction} from ${currentScrollTop.toFixed(0)} to ${newScrollTop.toFixed(0)}`);
       } else {
@@ -81,7 +73,6 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
     }
   };
 
-  // Custom scroll logic for the horizontal category tabs (DOM element) - (Remains stable)
   const scrollTabs = (direction) => {
     const scrollElement = tabsScrollRef.current;
     if (scrollElement) {
@@ -94,7 +85,6 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
         newScrollLeft = Math.min(scrollElement.scrollWidth - scrollElement.clientWidth, scrollElement.scrollLeft + scrollStep);
       }
 
-      // Use raw DOM method as Tabs.List is a standard div
       scrollElement.scrollTo({ 
         left: newScrollLeft, 
         behavior: 'smooth' 
@@ -119,10 +109,9 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
             Back to Home
         </Button>
       </Group>
-      {/* Outer Paper wrapper uses flex: 1 for height */}
+
       <Paper withBorder p="md" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         
-        {/* --- Category Tabs with Custom Horizontal Scrollers (Fixed Height) --- */}
         <Group align="center" gap="xs" mb="sm" style={{ flexShrink: 0 }}>
           <ScrollButton 
             icon={IconChevronLeft} 
@@ -152,10 +141,8 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
           />
         </Group>
         
-        {/* --- Product Grid with Custom Vertical Scrollers (Flexible Height) --- */}
         <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           
-          {/* Scroll Up Button Group (Fixed Height) */}
           <Group justify="space-between" mb="xs" style={{ flexShrink: 0 }}>
             <Text fw={600}>Products</Text>
             <Group gap={4}>
@@ -167,10 +154,8 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
             </Group>
           </Group>
 
-          {/* Scroll Area (Flexible Height, minHeight: 0 for internal scrolling) */}
           <ScrollArea 
             style={{ flex: 1, minHeight: 0, padding: '5px' }} 
-            // 🛑 FIX: Assigning two separate refs
             ref={productScrollComponentRef} 
             viewportRef={productViewportElementRef}
             scrollbarSize={0}
@@ -204,7 +189,7 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
                                   {product.name}
                                 </Text>
                                 <Text size="sm" fw={500} c="dimmed">
-                                  ${product.price.toFixed(2)}
+                                  {currencySymbol}{product.price.toFixed(2)}
                                 </Text>
                               </Stack>
                             </Paper>
@@ -217,7 +202,6 @@ export default function MenuPanel({ order, onBack, menu, onProductSelect }) {
             </Tabs>
           </ScrollArea>
 
-          {/* Scroll Down Button Group (Fixed Height) */}
           <Group justify="flex-end" mt="xs" style={{ flexShrink: 0 }}>
             <ScrollButton 
                 icon={IconChevronDown} 

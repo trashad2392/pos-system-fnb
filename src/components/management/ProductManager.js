@@ -40,7 +40,7 @@ function OrderedModifierList({ items, onMove, onRemove }) {
   );
 }
 
-export default function ProductManager({ products, categories, rawCategories = [], modifierGroups, menus = [], onDataChanged }) {
+export default function ProductManager({ products, categories, rawCategories = [], modifierGroups, rawModifierGroups = [], menus = [], onDataChanged, currencySymbol = '$ ' }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMenuId, setFilterMenuId] = useState(null);
   const [opened, { open, close }] = useDisclosure(false);
@@ -227,7 +227,6 @@ export default function ProductManager({ products, categories, rawCategories = [
               <Table.Th>Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
-          {/* --- FIX: Removed whitespace around map --- */}
           <Table.Tbody>{
             filteredProducts.length === 0 ? (
               <Table.Tr><Table.Td colSpan={6}><Text ta="center">No products found matching your criteria.</Text></Table.Td></Table.Tr>
@@ -238,7 +237,7 @@ export default function ProductManager({ products, categories, rawCategories = [
                   <Table.Td>{p.sku}</Table.Td>
                   <Table.Td>{p.category?.menu?.name || 'N/A'}</Table.Td>
                   <Table.Td>{p.category?.name || 'N/A'}</Table.Td>
-                  <Table.Td>${Number(p.price).toFixed(2)}</Table.Td>
+                  <Table.Td>{currencySymbol}{Number(p.price).toFixed(2)}</Table.Td>
                   <Table.Td>
                     <Group gap="xs">
                       <ActionIcon variant="outline" onClick={() => handleEditClick(p)}>
@@ -253,7 +252,6 @@ export default function ProductManager({ products, categories, rawCategories = [
               ))
              )
           }</Table.Tbody>
-           {/* --- END FIX --- */}
         </Table>
       </Paper>
 

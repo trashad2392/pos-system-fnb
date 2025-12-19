@@ -2,30 +2,27 @@
 "use client";
 
 import { Table, Text, Box, Button, Badge, Group } from '@mantine/core';
-import { IconBan, IconPrinter } from '@tabler/icons-react'; // <-- IMPORTED IconPrinter
-import { useAuth } from '@/context/AuthContext'; // <-- Import useAuth
+import { IconBan, IconPrinter } from '@tabler/icons-react'; //
+import { useAuth } from '@/context/AuthContext'; //
 
 const ClientDateTime = ({ date }) => {
   if (!date) return null;
   return new Date(date).toLocaleString();
 };
 
-export default function SalesTable({ sales, onOpenVoidModal }) {
-  const { hasPermission } = useAuth(); // <-- Use our permission hook
-  const canVoid = hasPermission('orders:void'); // <-- Check permission once
+export default function SalesTable({ sales, onOpenVoidModal, currencySymbol = '$ ' }) {
+  const { hasPermission } = useAuth(); //
+  const canVoid = hasPermission('orders:void'); //
   
-  // --- ADDED THIS FUNCTION ---
-  // We can just assume if a user can see this table, they can print.
   const handlePrint = async (orderId) => {
     try {
-      await window.api.printReceipt(orderId);
+      await window.api.printReceipt(orderId); //
     } catch (error) {
       console.error("Failed to print receipt:", error);
-      // You could show a notification here if you want
     }
   };
   
-  const displayedSales = [...sales].reverse();
+  const displayedSales = [...sales].reverse(); //
 
   return (
     <>
@@ -39,7 +36,6 @@ export default function SalesTable({ sales, onOpenVoidModal }) {
             <Table.Th>Items Sold</Table.Th>
             <Table.Th>Adjusted Total</Table.Th>
             <Table.Th>Status</Table.Th>
-            {/* Only render the Actions column if the user can void */}
             {canVoid && <Table.Th>Actions</Table.Th>}
           </Table.Tr>
         </Table.Thead>
@@ -48,7 +44,7 @@ export default function SalesTable({ sales, onOpenVoidModal }) {
             const isFullyVoided = sale.status === 'VOIDED';
 
             return (
-              <Table.Tr key={sale.id} style={isFullyVoided ? { backgroundColor: 'var(--mantant-color-red-0)' } : {}}>
+              <Table.Tr key={sale.id} style={isFullyVoided ? { backgroundColor: 'var(--mantine-color-red-0)' } : {}}>
                 <Table.Td>{index + 1}</Table.Td>
                 <Table.Td>
                   <ClientDateTime date={sale.createdAt} />
@@ -79,18 +75,16 @@ export default function SalesTable({ sales, onOpenVoidModal }) {
                     </Box>
                   ))}
                 </Table.Td>
-                <Table.Td fw={700}>${Number(sale.totalAmount).toFixed(2)}</Table.Td>
+                {/* FIXED: Replaced hardcoded $ with currencySymbol prop */}
+                <Table.Td fw={700}>{currencySymbol}{Number(sale.totalAmount).toFixed(2)}</Table.Td>
                 <Table.Td>
                    <Badge color={isFullyVoided ? "red" : "green"} variant="light">
                       {isFullyVoided ? "Voided" : "Paid"}
                    </Badge>
                 </Table.Td>
-                {/* Conditionally render the cell with the button */}
                 {canVoid && (
                   <Table.Td>
-                    {/* --- START: MODIFIED GROUP --- */}
                     <Group gap="xs">
-                      {/* --- ADDED THIS BUTTON --- */}
                       <Button
                         size="xs"
                         color="blue"
@@ -113,7 +107,6 @@ export default function SalesTable({ sales, onOpenVoidModal }) {
                         </Button>
                       )}
                     </Group>
-                    {/* --- END: MODIFIED GROUP --- */}
                   </Table.Td>
                 )}
               </Table.Tr>

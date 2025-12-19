@@ -7,11 +7,8 @@ import {
 } from '@mantine/core';
 import { IconEdit, IconTrash, IconPlus, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
-// ERROR: This will not work because the frontend uses ESM and the lib file is CJS.
-// Correcting this in the next turn by embedding the const directly.
-// const { modifierTemplates } = require('../../../lib/modifierTemplates');
 
-// Let's define it here directly to avoid module issues.
+// modifierTemplates defined directly to ensure ESM compatibility
 const modifierTemplates = [
   {
     name: 'Single Choice (Required)',
@@ -45,8 +42,7 @@ const modifierTemplates = [
   }
 ];
 
-
-// --- Helper component for the template selection modal ---
+// Helper component for the template selection modal
 function ModifierTypeSelectionModal({ opened, onClose, onSelect }) {
   return (
     <Modal opened={opened} onClose={onClose} title="Choose a Modifier Type" size="xl">
@@ -64,8 +60,7 @@ function ModifierTypeSelectionModal({ opened, onClose, onSelect }) {
   );
 }
 
-// --- Main ModifierManager Component ---
-export default function ModifierManager({ modifierGroups, onDataChanged }) {
+export default function ModifierManager({ modifierGroups, onDataChanged, currencySymbol = '$ ' }) {
   const [editingGroup, setEditingGroup] = useState(null);
   const [editingOption, setEditingOption] = useState(null);
   const [groupModalOpened, { open: openGroupModal, close: closeGroupModal }] = useDisclosure(false);
@@ -251,7 +246,7 @@ export default function ModifierManager({ modifierGroups, onDataChanged }) {
                   {group.options.map(option => (
                     <Table.Tr key={option.id}>
                       <Table.Td>{option.name}</Table.Td>
-                      <Table.Td>${Number(option.priceAdjustment).toFixed(2)}</Table.Td>
+                      <Table.Td>{currencySymbol}{Number(option.priceAdjustment).toFixed(2)}</Table.Td>
                       <Table.Td>{option.selectionCost}</Table.Td>
                       <Table.Td><Group gap="xs"><ActionIcon variant="subtle" onClick={() => { setEditingOption(option); openOptionModal(); }}><IconEdit size={14} /></ActionIcon><ActionIcon color="red" variant="subtle" onClick={() => handleOptionDelete(option.id)}><IconTrash size={14} /></ActionIcon></Group></Table.Td>
                     </Table.Tr>

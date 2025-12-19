@@ -173,26 +173,17 @@ export function usePosLogic() {
     commentModalOpened, discountModalOpened, keyboardVisible,
     customizingProduct, commentTarget, discountTarget, paymentModalInitialTab,
     heldOrders, discounts,
+    posSettings, // Added to return object
     actions: {
-      // 1. Spread generic actions first
       ...orderActions, 
       ...heldOrderActions, 
       ...modalActions,
 
-      // 2. Define custom logic wrappers last so they are not overwritten
       handleSelectDiscount: async (id) => { 
           if (!activeOrder) return;
-          
-          console.log(`[LOGIC-HOOK] Received ID from Modal: ${id}`);
-
           const currentId = activeOrder?.discountId;
           const finalIdToApply = (id === currentId) ? null : id;
-
-          console.log(`[LOGIC-HOOK] Final Intent -> ID: ${finalIdToApply}`);
-
           modalActions.handleCloseDiscountModal(); 
-          
-          // Call the order management handler with two arguments explicitly
           await orderActions.handleSelectDiscount(activeOrder, finalIdToApply); 
       },
 

@@ -27,9 +27,14 @@ export default function OrderView({
   onOpenDiscountModal,
   selectedPaymentMethods,
   openPaymentModal,
+  posSettings,
 }) {
   const [keypadInput, setKeypadInput] = useState('');
   const isCartEmpty = !order || !order.items || order.items.length === 0;
+
+  // FIXED: Always append a space after the symbol for better visual spacing
+  const rawSymbol = posSettings?.currency_symbol || '$';
+  const currencySymbol = `${rawSymbol} `; 
 
   useEffect(() => {
     setKeypadInput('');
@@ -72,7 +77,6 @@ export default function OrderView({
     return (basePrice + modifiersPrice) * (item.quantity || 0);
   };
 
-  // --- Total Calculations ---
   const subtotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
   
   let totalDiscountValue = 0;
@@ -84,7 +88,6 @@ export default function OrderView({
       } else {
         totalDiscountValue = order.discount.value;
       }
-      // Ensure discount doesn't exceed subtotal
       totalDiscountValue = Math.min(subtotal, totalDiscountValue);
     }
   }
@@ -116,7 +119,6 @@ export default function OrderView({
 
   return (
     <Grid gutter="xs" style={{ height: totalGridHeight, overflow: 'hidden' }}>
-      {/* 1. Action Sidebar */}
       <Grid.Col span={{ base: 12, xs: 1.5 }} style={{ minWidth: 65, ...columnStyle }}>
         <ActionSidebar
           order={order}
@@ -130,7 +132,6 @@ export default function OrderView({
         />
       </Grid.Col>
 
-      {/* 2. Cart Panel & Keypad */}
       <Grid.Col span={{ base: 12, xs: 3 }} style={columnStyle}>
         <Group justify="space-between" align="center" mb="xs" style={{ flexShrink: 0, paddingBottom: 5 }}>
           <Title order={3}>Cart</Title>
@@ -155,6 +156,7 @@ export default function OrderView({
               onSelectItem={onSelectItem}
               onRemoveItem={onRemoveItem}
               calculateItemTotal={calculateItemTotal}
+              currencySymbol={currencySymbol} 
             />
         </Box>
 
@@ -173,18 +175,18 @@ export default function OrderView({
                 <>
                     <Group justify="space-between">
                       <Text size="sm">Subtotal:</Text>
-                      <Text size="sm">${subtotal.toFixed(2)}</Text>
+                      <Text size="sm">{currencySymbol}{subtotal.toFixed(2)}</Text>
                     </Group>
                     <Group justify="space-between">
                       <Text size="sm" c="red">Discount:</Text>
-                      <Text size="sm" c="red">- ${totalDiscountValue.toFixed(2)}</Text>
+                      <Text size="sm" c="red">- {currencySymbol}{totalDiscountValue.toFixed(2)}</Text>
                     </Group>
                 </>
                 )}
                 
                 <Group justify="space-between" mb="xs">
                     <Title order={3}>Total:</Title>
-                    <Title order={3}>${Number(order?.totalAmount || 0).toFixed(2)}</Title>
+                    <Title order={3}>{currencySymbol}{Number(order?.totalAmount || 0).toFixed(2)}</Title>
                 </Group>
 
                 <Button
@@ -201,13 +203,13 @@ export default function OrderView({
         </Box>
       </Grid.Col>
 
-      {/* 3. Menu Panel */}
       <Grid.Col span={{ base: 12, xs: 7.5 }} style={columnStyle}>
         <MenuPanel
           order={order}
           onBack={onBack}
           menu={menu}
           onProductSelect={onProductSelect}
+          currencySymbol={currencySymbol} 
         />
       </Grid.Col>
     </Grid>

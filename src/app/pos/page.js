@@ -22,6 +22,7 @@ export default function PosPage() {
     selectedPaymentMethods,
     paymentModalInitialTab,
     paymentMethods,
+    posSettings, // Extracted from usePosLogic
     actions
   } = usePosLogic();
 
@@ -49,6 +50,7 @@ export default function PosPage() {
           onOpenDiscountModal={actions.handleOpenDiscountModal}
           selectedPaymentMethods={selectedPaymentMethods}
           openPaymentModal={actions.openPaymentModal}
+          posSettings={posSettings} // Passed to OrderView
         />;
       case 'table-select':
         return <TableSelectView
@@ -60,7 +62,7 @@ export default function PosPage() {
       default:
         return <PosHomeView
           onSelectDineIn={actions.handleSelectDineIn}
-          onStartOrder={actions.startOrder} // Ensure this matches the prop expected in PosHomeView
+          onStartOrder={actions.startOrder} 
         />;
     }
   }
@@ -105,10 +107,8 @@ export default function PosPage() {
 
       <DiscountModal
         opened={discountModalOpened}
-        // Use the actions object from usePosLogic
         onClose={actions.handleCloseDiscountModal} 
         discounts={discounts}
-        // This calls the explicit wrapper we just fixed above
         onSelectDiscount={(id) => actions.handleSelectDiscount(id)} 
         target={activeOrder}
       />

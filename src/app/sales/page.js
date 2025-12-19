@@ -6,24 +6,15 @@ import { Title, Tabs, Loader, Center, Text } from '@mantine/core';
 import { startOfDay, endOfDay, subDays } from 'date-fns';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
-import { useAuth } from '@/context/AuthContext'; // <-- Import useAuth
+import { useAuth } from '@/context/AuthContext';
 import Dashboard from './components/Dashboard';
 import SalesReport from './components/SalesReport';
 import VoidItemModal from './components/VoidItemModal';
 
 export default function SalesPage() {
-  const { hasPermission } = useAuth(); // <-- Use our permission hook
+  const { hasPermission } = useAuth();
 
-  // --- NEW: Permission Gate ---
-  if (!hasPermission('sales:view_reports')) {
-    return (
-      <Center style={{ height: '50vh' }}>
-        <Text c="red" fw={500}>You do not have permission to view this page.</Text>
-      </Center>
-    );
-  }
-  // --- END: Permission Gate ---
-
+  const [posSettings, setPosSettings] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [voidModalOpened, { open: openVoidModal, close: closeVoidModal }] = useDisclosure(false);
   const [orderToVoid, setOrderToVoid] = useState(null);
@@ -36,6 +27,19 @@ export default function SalesPage() {
   const [sales, setSales] = useState([]);
   const [isReportLoading, setIsReportLoading] = useState(false);
 
+  // Fetch settings to get the dynamic currency symbol
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const settings = await window.api.getPosSettings();
+        setPosSettings(settings);
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      }
+    }
+    loadSettings();
+  }, []);
+
   const handleOpenVoidModal = (orderId) => {
     const order = sales.find(s => s.id === orderId);
     if (order) {
@@ -47,48 +51,24 @@ export default function SalesPage() {
   const handleVoidItem = async (orderItemId, voidType) => {
     try {
       const updatedOrder = await window.api.voidOrderItem({ orderItemId, voidType });
-      
-      notifications.show({
-        title: 'Success',
-        message: 'Item has been voided.',
-        color: 'green',
-      });
-
+      notifications.show({ title: 'Success', message: 'Item has been voided.', color: 'green' });
       setOrderToVoid(updatedOrder);
-      setSales(currentSales => 
-        currentSales.map(sale => sale.id === updatedOrder.id ? updatedOrder : sale)
-      );
-
+      setSales(currentSales => currentSales.map(sale => sale.id === updatedOrder.id ? updatedOrder : sale));
       await fetchDashboardData();
-
     } catch (error) {
-      console.error("Failed to void item:", error);
-      notifications.show({
-        title: 'Error',
-        message: `Failed to void item: ${error.message}`,
-        color: 'red',
-      });
+      notifications.show({ title: 'Error', message: `Failed to void item: ${error.message}`, color: 'red' });
     }
   };
 
   const handleVoidFullOrder = async (orderId, voidType) => {
     try {
       await window.api.voidFullOrder({ orderId, voidType });
-      notifications.show({
-        title: 'Success',
-        message: 'The entire order has been voided.',
-        color: 'green',
-      });
+      notifications.show({ title: 'Success', message: 'The entire order has been voided.', color: 'green' });
       await fetchSalesData();
       await fetchDashboardData();
       closeVoidModal(); 
     } catch (error) {
-      console.error("Failed to void full order:", error);
-      notifications.show({
-        title: 'Error',
-        message: `Failed to void full order: ${error.message}`,
-        color: 'red',
-      });
+      notifications.show({ title: 'Error', message: `Failed to void full order: ${error.message}`, color: 'red' });
     }
   };
 
@@ -141,6 +121,17 @@ export default function SalesPage() {
     }
   }, [reportDateRange, activeTab]);
 
+  if (!hasPermission('sales:view_reports')) {
+    return (
+      <Center style={{ height: '50vh' }}>
+        <Text c="red" fw={500}>You do not have permission to view this page.</Text>
+      </Center>
+    );
+  }
+
+  // Define the dynamic currency symbol with a mandatory trailing space
+  const currencySymbol = `${posSettings?.currency_symbol || '$'} `;
+
   return (
     <div>
       <Title order={1} mb="xl">Sales</Title>
@@ -158,6 +149,7 @@ export default function SalesPage() {
               chartData={chartData}
               dateRange={dashboardDateRange}
               onDateChange={setDashboardDateRange}
+              currencySymbol={currencySymbol} // Pass symbol to dashboard
             />
           }
         </Tabs.Panel>
@@ -169,12 +161,12 @@ export default function SalesPage() {
               dateRange={reportDateRange}
               onDateChange={setReportDateRange}
               onOpenVoidModal={handleOpenVoidModal}
+              currencySymbol={currencySymbol} // Pass symbol to report
             />
           }
         </Tabs.Panel>
       </Tabs>
 
-      {/* Conditionally render the modal only if the user has permission */}
       {hasPermission('orders:void') && (
         <VoidItemModal
           opened={voidModalOpened}

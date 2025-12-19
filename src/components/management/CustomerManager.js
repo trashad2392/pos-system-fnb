@@ -9,15 +9,14 @@ import { IconEdit, IconTrash, IconPlus, IconWallet } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 
-const initialCompanyState = { name: '', creditLimit: 0, isActive: true, hasLimit: false }; // ADDED hasLimit
-const initialCustomerState = { name: '', balance: 0, creditLimit: 0, companyId: null, isActive: true, hasLimit: false }; // ADDED hasLimit
+const initialCompanyState = { name: '', creditLimit: 0, isActive: true, hasLimit: false }; 
+const initialCustomerState = { name: '', balance: 0, creditLimit: 0, companyId: null, isActive: true, hasLimit: false }; 
 
-function formatCurrency(amount) {
-    return `$${Number(amount).toFixed(2)}`;
-}
+// --- Helper Table Component for Customers ---
+function CustomerTable({ customers, onEdit, onPay, onDelete, currencySymbol }) { 
+    // Internal helper to format currency using the dynamic prop
+    const formatCurrency = (amount) => `${currencySymbol}${Number(amount).toFixed(2)}`;
 
-// --- Helper Table Component for Customers (MODIFIED) ---
-function CustomerTable({ customers, onEdit, onPay, onDelete }) { 
     return (
         <Table striped highlightOnHover withTableBorder>
             <Table.Thead>
@@ -58,7 +57,6 @@ function CustomerTable({ customers, onEdit, onPay, onDelete }) {
                                     <Button size="xs" variant="light" leftSection={<IconWallet size={14} />} onClick={() => onPay(customer)}>
                                         Receive Pmt
                                     </Button>
-                                    {/* --- NEW DELETE BUTTON --- */}
                                     <ActionIcon 
                                         color="red" 
                                         variant="outline" 
@@ -67,7 +65,6 @@ function CustomerTable({ customers, onEdit, onPay, onDelete }) {
                                     >
                                         <IconTrash size={16} />
                                     </ActionIcon>
-                                    {/* --- END NEW DELETE BUTTON --- */}
                                 </Group>
                             </Table.Td>
                         </Table.Tr>
@@ -77,11 +74,9 @@ function CustomerTable({ customers, onEdit, onPay, onDelete }) {
         </Table>
     );
 }
-// --- End Helper Table Component ---
 
-
-// --- Main Component (MODIFIED) ---
-export default function CustomerManager() {
+// --- Main Component ---
+export default function CustomerManager({ currencySymbol = '$ ' }) {
   const [companies, setCompanies] = useState([]);
   const [customers, setCustomers] = useState([]); // Flat list of all customers
   const [isLoading, setIsLoading] = useState(true);
@@ -96,6 +91,9 @@ export default function CustomerManager() {
   const [customerToPay, setCustomerToPay] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
 
+  // Reusable currency formatter for modals
+  const formatCurrency = (amount) => `${currencySymbol}${Number(amount).toFixed(2)}`;
+
   const customersInCompanies = useMemo(() => {
     return companies.map(company => {
         const associatedCustomers = customers.filter(c => c.companyId === company.id);
@@ -105,7 +103,6 @@ export default function CustomerManager() {
         };
     });
   }, [companies, customers]);
-
 
   const companyOptions = useMemo(() => [
     { value: '', label: 'No Company (Individual Account)' },
@@ -119,11 +116,8 @@ export default function CustomerManager() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Fetch active companies including their active customers
       const companyData = await window.api.getCompanies();
-      // Fetch all active customers, regardless of company
       const customerData = await window.api.getCustomers();
-      
       setCompanies(companyData);
       setCustomers(customerData);
     } catch (error) {
@@ -138,8 +132,7 @@ export default function CustomerManager() {
     fetchData();
   }, [fetchData]);
 
-  // --- Company CRUD Handlers (MODIFIED) ---
-
+  // --- Company CRUD Handlers ---
   const handleOpenCompanyModal = (company = null) => {
     setEditingCompany(company ? 
         { ...company, hasLimit: company.creditLimit > 0 } : 
@@ -152,7 +145,6 @@ export default function CustomerManager() {
     
     const dataToSave = {
       name: editingCompany.name,
-      // Pass 0 if hasLimit is false
       creditLimit: editingCompany.hasLimit ? (parseFloat(editingCompany.creditLimit) || 0) : 0, 
       isActive: editingCompany.isActive,
     };
@@ -172,8 +164,7 @@ export default function CustomerManager() {
     }
   };
 
-  // --- Customer CRUD Handlers (MODIFIED) ---
-
+  // --- Customer CRUD Handlers ---
   const handleOpenCustomerModal = (customer = null, defaultCompanyId = null) => {
     const initial = customer ? 
         { 
@@ -196,7 +187,6 @@ export default function CustomerManager() {
     const dataToSave = {
       name: editingCustomer.name,
       balance: parseFloat(editingCustomer.balance) || 0,
-      // Pass 0 if hasLimit is false
       creditLimit: editingCustomer.hasLimit ? (parseFloat(editingCustomer.creditLimit) || 0) : 0, 
       isActive: editingCustomer.isActive,
       companyId: editingCustomer.companyId ? parseInt(editingCustomer.companyId, 10) : null,
@@ -217,9 +207,8 @@ export default function CustomerManager() {
     }
   };
   
-  // --- NEW DELETE/ARCHIVE HANDLER ---
   const handleDeleteCustomer = async (id) => {
-    if (window.confirm('Are you sure you want to archive this customer? They will not appear in the POS credit list.')) {
+    if (window.confirm('Are you sure you want to archive this customer?')) {
         try {
             await window.api.deleteCustomer(id); 
             notifications.show({ title: 'Success', message: 'Customer archived.', color: 'orange' });
@@ -229,13 +218,11 @@ export default function CustomerManager() {
         }
     }
   };
-  // --- END NEW DELETE/ARCHIVE HANDLER ---
 
-
-  // --- Payment Handlers (Unchanged) ---
+  // --- Payment Handlers ---
   const handleOpenPaymentModal = (customer) => {
     setCustomerToPay(customer);
-    setPaymentAmount(Math.max(0, -customer.balance)); // Pre-fill with debt, or 0
+    setPaymentAmount(Math.max(0, -customer.balance)); 
     openPaymentModal();
   };
 
@@ -248,7 +235,7 @@ export default function CustomerManager() {
       const updatedCustomer = await window.api.addCustomerPayment({
         customerId: customerToPay.id,
         amount: parseFloat(paymentAmount),
-        method: 'Account Payment', // Simple placeholder method
+        method: 'Account Payment', 
       });
       notifications.show({ 
         title: 'Payment Successful', 
@@ -261,18 +248,16 @@ export default function CustomerManager() {
       notifications.show({ title: 'Error', message: `Payment failed: ${error.message}`, color: 'red' });
     }
   };
-  // --- End Payment Handlers ---
 
   if (isLoading) {
     return <Text>Loading customer accounts...</Text>;
   }
 
-  // Filter customers not linked to a company
   const individualCustomers = customers.filter(c => c.companyId === null);
 
   return (
     <>
-      {/* ===== Company Modal (MODIFIED) ===== */}
+      {/* ===== Company Modal ===== */}
       <Modal opened={companyModalOpened} onClose={closeCompanyModal} title={editingCompany.id ? `Edit Company: ${editingCompany.name}` : 'Add New Company'}>
         <TextInput
           label="Company Name"
@@ -288,11 +273,11 @@ export default function CustomerManager() {
         />
         <NumberInput
           mt="md"
-          label="Credit Limit ($)"
+          label={`Credit Limit (${currencySymbol.trim()})`}
           description="Maximum debt allowed before payment is required. (0 = no limit)"
           precision={2}
           min={0}
-          disabled={!editingCompany.hasLimit} // DISABLED IF NO LIMIT
+          disabled={!editingCompany.hasLimit} 
           value={editingCompany.creditLimit || 0}
           onChange={(value) => setEditingCompany({ ...editingCompany, creditLimit: value })}
         />
@@ -305,7 +290,7 @@ export default function CustomerManager() {
         <Group justify="flex-end" mt="xl"><Button variant="default" onClick={closeCompanyModal}>Cancel</Button><Button onClick={handleSaveCompany}>Save Company</Button></Group>
       </Modal>
 
-      {/* ===== Customer Modal (MODIFIED) ===== */}
+      {/* ===== Customer Modal ===== */}
       <Modal opened={customerModalOpened} onClose={closeCustomerModal} title={editingCustomer.id ? `Edit Customer: ${editingCustomer.name}` : 'Add New Customer'}>
         <TextInput
           label="Customer Name"
@@ -324,7 +309,7 @@ export default function CustomerManager() {
         />
         <NumberInput
           mt="md"
-          label="Current Balance ($)"
+          label={`Current Balance (${currencySymbol.trim()})`}
           description="Positive amount is credit balance, negative is debt."
           precision={2}
           value={editingCustomer.balance || 0}
@@ -338,22 +323,22 @@ export default function CustomerManager() {
         />
         <NumberInput
           mt="md"
-          label="Credit Limit ($)"
+          label={`Credit Limit (${currencySymbol.trim()})`}
           description="Maximum personal debt allowed."
           precision={2}
           min={0}
-          disabled={!editingCustomer.hasLimit} // DISABLED IF NO LIMIT
+          disabled={!editingCustomer.hasLimit} 
           value={editingCustomer.creditLimit || 0}
           onChange={(value) => setEditingCustomer({ ...editingCustomer, creditLimit: value })}
         />
         <Group justify="flex-end" mt="xl"><Button variant="default" onClick={closeCustomerModal}>Cancel</Button><Button onClick={handleSaveCustomer}>Save Customer</Button></Group>
       </Modal>
       
-      {/* ===== Payment Modal (Unchanged) ===== */}
+      {/* ===== Payment Modal ===== */}
       <Modal opened={paymentModalOpened} onClose={closePaymentModal} title={`Receive Payment from ${customerToPay?.name}`}>
-         <Text size="lg" mb="sm">Current Balance: <Text span fw={700} c={customerToPay?.balance < 0 ? 'red' : 'green'}>{formatCurrency(customerToPay?.balance)}</Text></Text>
+         <Text size="lg" mb="sm">Current Balance: <Text span fw={700} c={customerToPay?.balance < 0 ? 'red' : 'green'}>{formatCurrency(customerToPay?.balance || 0)}</Text></Text>
          <NumberInput
-            label="Payment Amount ($)"
+            label={`Payment Amount (${currencySymbol.trim()})`}
             description="Enter the amount received from the customer."
             precision={2}
             min={0.01}
@@ -367,8 +352,6 @@ export default function CustomerManager() {
          </Group>
       </Modal>
 
-
-      {/* ===== Main View (Updated to pass onDelete to CustomerTable) ===== */}
       <Paper shadow="xs" p="md" withBorder>
         <Group justify="space-between" mb="md">
           <Title order={3}>Credit Sale Customers Manager</Title>
@@ -401,7 +384,8 @@ export default function CustomerManager() {
                       customers={company.customers} 
                       onEdit={handleOpenCustomerModal} 
                       onPay={handleOpenPaymentModal} 
-                      onDelete={handleDeleteCustomer} // ADDED PROP
+                      onDelete={handleDeleteCustomer} 
+                      currencySymbol={currencySymbol}
                     />
                   ) : (
                     <Text size="sm" c="dimmed">No active customers linked.</Text>
@@ -422,7 +406,8 @@ export default function CustomerManager() {
             customers={individualCustomers} 
             onEdit={handleOpenCustomerModal} 
             onPay={handleOpenPaymentModal} 
-            onDelete={handleDeleteCustomer} // ADDED PROP
+            onDelete={handleDeleteCustomer} 
+            currencySymbol={currencySymbol}
           />
         ) : (
           <Text c="dimmed">No individual customer accounts found.</Text>
