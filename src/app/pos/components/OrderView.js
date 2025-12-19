@@ -43,6 +43,7 @@ export default function OrderView({
     const newQuantity = parseInt(newString, 10);
     if (!isNaN(newQuantity)) onUpdateQuantity(selectedItemId, newQuantity);
   };
+
   const handleBackspace = () => {
     if (!selectedItemId) return;
     const newString = keypadInput.slice(0, -1);
@@ -53,6 +54,7 @@ export default function OrderView({
         if (!isNaN(newQuantity)) onUpdateQuantity(selectedItemId, newQuantity);
     }
   };
+
   const handleClear = () => {
     if (!selectedItemId) return;
     setKeypadInput('');
@@ -70,24 +72,20 @@ export default function OrderView({
     return (basePrice + modifiersPrice) * (item.quantity || 0);
   };
 
-  const subtotal = order?.items?.reduce((sum, item) => {
-      let itemTotal = calculateItemTotal(item);
-      if (item.discount) {
-          if (item.discount.type === 'PERCENT') itemTotal *= (1 - item.discount.value / 100);
-          else itemTotal -= (item.discount.value * item.quantity);
-      }
-      return sum + itemTotal;
-  }, 0) || 0;
+  // --- Total Calculations ---
+  const subtotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
   
-  let discountAmount = 0;
-  const preOrderDiscountSubtotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
-  
+  let totalDiscountValue = 0;
   if (order?.discount) {
     const minAmount = order.discount.minimumOrderAmount || 0;
-    if (preOrderDiscountSubtotal >= minAmount) {
-      if (order.discount.type === 'PERCENT') discountAmount = preOrderDiscountSubtotal * (order.discount.value / 100);
-      else discountAmount = order.discount.value;
-      discountAmount = Math.min(preOrderDiscountSubtotal, discountAmount);
+    if (subtotal >= minAmount) {
+      if (order.discount.type === 'PERCENT') {
+        totalDiscountValue = subtotal * (order.discount.value / 100);
+      } else {
+        totalDiscountValue = order.discount.value;
+      }
+      // Ensure discount doesn't exceed subtotal
+      totalDiscountValue = Math.min(subtotal, totalDiscountValue);
     }
   }
 
@@ -107,7 +105,6 @@ export default function OrderView({
   const finalPaymentButtonAction = selectedPaymentMethods ? onFinalize : onFastCash;
   const finalPaymentButtonColor = selectedPaymentMethods ? 'blue' : 'green';
 
-  // --- HEIGHT MANAGEMENT ---
   const totalGridHeight = 'calc(100vh - 100px)'; 
 
   const columnStyle = {
@@ -119,7 +116,7 @@ export default function OrderView({
 
   return (
     <Grid gutter="xs" style={{ height: totalGridHeight, overflow: 'hidden' }}>
-      {/* 1. Action Sidebar (Col 1.5) */}
+      {/* 1. Action Sidebar */}
       <Grid.Col span={{ base: 12, xs: 1.5 }} style={{ minWidth: 65, ...columnStyle }}>
         <ActionSidebar
           order={order}
@@ -133,10 +130,8 @@ export default function OrderView({
         />
       </Grid.Col>
 
-      {/* 2. Cart Panel & Keypad (Col 3) */}
+      {/* 2. Cart Panel & Keypad */}
       <Grid.Col span={{ base: 12, xs: 3 }} style={columnStyle}>
-        
-        {/* Header/Title - Fixed Height (Shrink 0) */}
         <Group justify="space-between" align="center" mb="xs" style={{ flexShrink: 0, paddingBottom: 5 }}>
           <Title order={3}>Cart</Title>
            {selectedPaymentMethods && (
@@ -152,8 +147,7 @@ export default function OrderView({
           )}
         </Group>
 
-        {/* 🛑 FIX: Cart Panel area: Removed marginBottom and rely on Keypad margin for spacing */}
-        <Box style={{ flexGrow: 1, flexShrink: 0, minHeight: 0 }}>
+        <Box style={{ flexGrow: 1, flexShrink: 1, minHeight: 0 }}>
             <CartPanel
               order={order}
               isCartEmpty={isCartEmpty}
@@ -164,8 +158,7 @@ export default function OrderView({
             />
         </Box>
 
-        {/* Keypad & Totals: Fixed Height area (Shrink 0) */}
-        <Box style={{ flexShrink: 0, marginTop: 8 }}> {/* Added top margin for spacing */}
+        <Box style={{ flexShrink: 0, marginTop: 8 }}>
             <Keypad 
               onNumberPress={handleNumberPress} 
               onBackspace={handleBackspace} 
@@ -175,15 +168,16 @@ export default function OrderView({
             
             <Box p="xs" pt={0}>
                 <Divider my="xs" />
-                {discountAmount > 0.001 && (
+                
+                {totalDiscountValue > 0.001 && (
                 <>
                     <Group justify="space-between">
-                    <Text size="sm">Subtotal:</Text>
-                    <Text size="sm">${preOrderDiscountSubtotal.toFixed(2)}</Text>
+                      <Text size="sm">Subtotal:</Text>
+                      <Text size="sm">${subtotal.toFixed(2)}</Text>
                     </Group>
                     <Group justify="space-between">
-                    <Text size="sm" c="red">Discount:</Text>
-                    <Text size="sm" c="red">- ${discountAmount.toFixed(2)}</Text>
+                      <Text size="sm" c="red">Discount:</Text>
+                      <Text size="sm" c="red">- ${totalDiscountValue.toFixed(2)}</Text>
                     </Group>
                 </>
                 )}
@@ -207,7 +201,7 @@ export default function OrderView({
         </Box>
       </Grid.Col>
 
-      {/* 3. Menu Panel (Col 7.5) */}
+      {/* 3. Menu Panel */}
       <Grid.Col span={{ base: 12, xs: 7.5 }} style={columnStyle}>
         <MenuPanel
           order={order}

@@ -1,7 +1,7 @@
 // src/app/pos/components/ActionSidebar.js
 "use client";
 import { Stack, Button, Box, Tooltip, Text } from '@mantine/core';
-import { IconDeviceFloppy, IconEraser, IconX, IconPencil, IconTag, IconNote, IconWallet } from '@tabler/icons-react';
+import { IconDeviceFloppy, IconEraser, IconPencil, IconTag, IconNote, IconWallet } from '@tabler/icons-react';
 import { useAuth } from '@/context/AuthContext';
 
 // Revised ActionButton to use flex: 1 for equal height distribution
@@ -21,7 +21,7 @@ const ActionButton = ({ icon: Icon, onClick, color = 'blue', label, disabled = f
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 0, // Prevents buttons from forcing container growth
+        minHeight: 0, 
       }}
     >
       <Icon size={26} style={{ marginBottom: 4, flexShrink: 0 }} />
@@ -44,17 +44,20 @@ export default function ActionSidebar({
 }) {
   const { hasPermission } = useAuth();
 
+  // FIXED: Trigger the modal without passing the order object here.
+  // The target is already determined in usePosLogic.js
   const handleDiscountClick = () => {
-    if (order) onOpenDiscountModal(order);
+    onOpenDiscountModal(); 
   };
   
   const handleItemNoteClick = () => {
-    const item = order?.items?.find(i => i.id === selectedItemId);
-    if (item) onOpenCommentModal(item);
+    // Pass the selectedItemId so the modal knows we are commenting on an item
+    if (selectedItemId) onOpenCommentModal(selectedItemId);
   };
   
   const handleOrderNoteClick = () => {
-    if (order) onOpenCommentModal(order);
+    // Passing null triggers the modal to target the Order level
+    onOpenCommentModal(null);
   };
   
   const handleOtherPaymentsClick = () => {
@@ -65,15 +68,13 @@ export default function ActionSidebar({
     <Box 
       style={{ 
         width: '100%', 
-        height: '100%', // Inherited from parent Grid.Col
+        height: '100%', 
         borderRight: '1px solid var(--mantine-color-gray-3)',
-        overflow: 'hidden' // Ensure no scroll is introduced here
+        overflow: 'hidden' 
       }} 
-      // 🛑 FIX: Removed vertical padding (py) to prevent column overflow, kept horizontal (px)
       px="xs" 
       py={0}
     >
-      {/* Stack (flex container) is set to 100% height, gap="xs" is the spacing */}
       <Stack gap="xs" style={{ height: '100%' }}>
         
         {/* 1. Order Note */}
@@ -103,6 +104,7 @@ export default function ActionSidebar({
           label="Discount" 
           color="red"
           variant="outline"
+          // Ensure permission check is active
           disabled={isCartEmpty || !order || !hasPermission('discounts:apply')}
         />
 
@@ -121,7 +123,7 @@ export default function ActionSidebar({
           icon={IconEraser} 
           onClick={onClearOrder} 
           label="Clear Cart" 
-          color="red"
+          color="red" 
           variant="light"
           disabled={isCartEmpty}
         />

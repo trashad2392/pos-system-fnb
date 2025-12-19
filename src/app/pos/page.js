@@ -1,4 +1,4 @@
-// src/app/pos/components/PosPage.js
+// src/app/pos/page.js
 "use client";
 
 import { Loader, Center } from '@mantine/core';
@@ -21,7 +21,7 @@ export default function PosPage() {
     discountTarget, discountModalOpened,
     selectedPaymentMethods,
     paymentModalInitialTab,
-    paymentMethods, // <-- NEW: Destructure paymentMethods from hook
+    paymentMethods,
     actions
   } = usePosLogic();
 
@@ -60,7 +60,7 @@ export default function PosPage() {
       default:
         return <PosHomeView
           onSelectDineIn={actions.handleSelectDineIn}
-          onStartOrder={actions.startOrder}
+          onStartOrder={actions.startOrder} // Ensure this matches the prop expected in PosHomeView
         />;
     }
   }
@@ -82,7 +82,7 @@ export default function PosPage() {
         onClose={actions.closePaymentModal}
         onSelectPayment={actions.handleSelectPayment}
         initialTab={paymentModalInitialTab}
-        paymentMethods={paymentMethods} // <-- NEW PROP
+        paymentMethods={paymentMethods}
       />
 
       <HeldOrdersModal
@@ -105,12 +105,13 @@ export default function PosPage() {
 
       <DiscountModal
         opened={discountModalOpened}
-        onClose={actions.handleCloseDiscountModal}
-        onSelectDiscount={actions.handleSelectDiscount}
-        target={discountTarget}
+        // Use the actions object from usePosLogic
+        onClose={actions.handleCloseDiscountModal} 
         discounts={discounts}
+        // This calls the explicit wrapper we just fixed above
+        onSelectDiscount={(id) => actions.handleSelectDiscount(id)} 
+        target={activeOrder}
       />
-
     </div>
   );
 }

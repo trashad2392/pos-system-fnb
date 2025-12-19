@@ -1,7 +1,7 @@
 // src/hooks/usePosLogic.js
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePosData } from './usePosData';
 import { useModalState } from './useModalState';
 import { useOrderManagement } from './useOrderManagement';
@@ -9,93 +9,68 @@ import { usePosView } from './usePosView';
 import { useHeldOrders } from './useHeldOrders';
 import { useMenuFiltering } from './useMenuFiltering';
 import { notifications } from '@mantine/notifications';
+import { validatePaymentTotal, prepareFinalPayments } from '../lib/paymentUtils';
 
-// Helper hook to track previous value
 function usePrevious(value) {
   const ref = useRef();
-  useEffect(() => {
-    ref.current = value;
-  });
+  useEffect(() => { ref.current = value; });
   return ref.current;
 }
 
-
 export function usePosLogic() {
   const {
-    tables, fullActiveMenuData, posSettings, discounts, paymentMethods, // <-- ADDED paymentMethods
-    isLoading, error, refreshData
+    tables, fullActiveMenuData, posSettings, paymentMethods,
+    isLoading, error: dataError, discounts, refreshData 
   } = usePosData();
 
   const {
-    modifierModalOpened, paymentModalOpened, heldOrdersModalOpened, commentModalOpened, discountModalOpened, keyboardVisible,
-    customizingProduct, commentTarget, discountTarget,
-    paymentModalInitialTab, // Get initial tab state
+    paymentModalOpened, paymentModalInitialTab,
+    modifierModalOpened, heldOrdersModalOpened, commentModalOpened, 
+    discountModalOpened, keyboardVisible, customizingProduct, 
+    commentTarget, discountTarget,
     actions: modalActions
   } = useModalState();
 
   const {
-    activeOrder, setActiveOrder, selectedItemId,
+    activeOrder, selectedItemId,
     initializeOrder, clearActiveOrder, actions: orderActions
   } = useOrderManagement();
 
-  const {
-    posView, actions: viewActions
-  } = usePosView();
-
-  const {
-    currentDisplayMenu, actions: menuActions
-  } = useMenuFiltering(fullActiveMenuData, posSettings, isLoading, error);
+  const { posView, actions: viewActions } = usePosView();
+  const { currentDisplayMenu, actions: menuActions } = useMenuFiltering(fullActiveMenuData, posSettings, isLoading);
 
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState(null);
   const [paymentSelectionType, setPaymentSelectionType] = useState(null);
   const [splitPaymentRequiresReconfirm, setSplitPaymentRequiresReconfirm] = useState(false);
-  // --- RESTORED STATE: Store the selected customerId for credit sales ---
   const [creditSaleCustomerId, setCreditSaleCustomerId] = useState(null);
-  // --- END RESTORED STATE ---
 
-
-  const {
-    heldOrders, actions: heldOrderActions
-  } = useHeldOrders(modalActions, viewActions, initializeOrder, menuActions.updateDisplayMenuForOrderType);
+  const { heldOrders, actions: heldOrderActions } = useHeldOrders(
+    modalActions, 
+    viewActions, 
+    initializeOrder, 
+    menuActions.updateDisplayMenuForOrderType
+  );
 
   const previousTotalAmount = usePrevious(activeOrder?.totalAmount);
   const previousOrderId = usePrevious(activeOrder?.id);
 
-  // Effect to clear selected payments when the order ID changes or becomes null
   useEffect(() => {
     if (activeOrder?.id !== previousOrderId) {
-        console.log(`[usePosLogic] Order ID changed from ${previousOrderId} to ${activeOrder?.id}. Clearing payment selection.`);
         setSelectedPaymentMethods(null);
         setPaymentSelectionType(null);
         setSplitPaymentRequiresReconfirm(false);
-        setCreditSaleCustomerId(null); // <-- CLEAR CUSTOMER ID
+        setCreditSaleCustomerId(null);
     }
   }, [activeOrder?.id, previousOrderId]);
 
-
-  // Effect to FLAG reconfirmation if total changes *after* 'split' selection
   useEffect(() => {
-    if (
-        selectedPaymentMethods &&
-        activeOrder &&
-        previousTotalAmount !== undefined &&
-        activeOrder?.id === previousOrderId &&
-        activeOrder.totalAmount !== previousTotalAmount
-       ) {
-
-        if (paymentSelectionType === 'split') {
-            console.log(`[usePosLogic] Order total changed after SPLIT payment selection. Flagging for reconfirmation.`);
-            setSplitPaymentRequiresReconfirm(true);
-            // --- NOTIFICATION REMOVED ---
-        }
-        // No action needed for 'full' payment type change
+    if (selectedPaymentMethods && activeOrder && previousTotalAmount !== undefined && 
+        activeOrder?.id === previousOrderId && activeOrder.totalAmount !== previousTotalAmount) {
+        if (paymentSelectionType === 'split') setSplitPaymentRequiresReconfirm(true);
     }
   }, [activeOrder?.totalAmount, previousTotalAmount, selectedPaymentMethods, paymentSelectionType, activeOrder?.id, previousOrderId]);
 
-
-  // --- START ORDER ---
   const startOrder = useCallback(async (orderType, tableId = null) => {
-    console.log(`[usePosLogic] Attempting to start order: type=${orderType}, tableId=${tableId}`);
     try {
       menuActions.updateDisplayMenuForOrderType(orderType);
       const newOrder = await window.api.createOrder({ tableId, orderType });
@@ -104,317 +79,135 @@ export function usePosLogic() {
       initializeOrder(newOrder);
       viewActions.navigateToOrderView();
       if (tableId) await refreshData();
-      console.log(`[usePosLogic] Started new order ID: ${newOrder.id}`);
     } catch (err) {
-      console.error("[usePosLogic] Failed to start order:", err);
       notifications.show({ title: 'Error', message: `Failed to start order: ${err.message}`, color: 'red' });
     }
   }, [tables, menuActions, initializeOrder, viewActions, refreshData]);
 
-  // --- RESUME DINE-IN ORDER ---
-  const resumeOrder = useCallback(async (table) => {
-     console.log(`[usePosLogic] Attempting to resume order for table: ${table.name} (ID: ${table.id})`);
-    try {
-      const existingOrder = await window.api.getOpenOrderForTable(table.id);
-      if (existingOrder) {
-        menuActions.updateDisplayMenuForOrderType(existingOrder.orderType);
-        initializeOrder(existingOrder);
-        viewActions.navigateToOrderView();
-        console.log(`[usePosLogic] Resumed order ID: ${existingOrder.id}`);
-      } else {
-        console.warn(`[usePosLogic] No open order found for table ${table.id}, starting a new Dine-In order.`);
-        await startOrder('Dine-In', table.id);
-      }
-    } catch (err) {
-      console.error("[usePosLogic] Failed to resume order:", err);
-      notifications.show({ title: 'Error', message: `Failed to resume order: ${err.message}`, color: 'red' });
-    }
-  }, [menuActions, initializeOrder, viewActions, startOrder]);
-
-
-  // --- GO HOME (Reset View) ---
-  const handleGoHome = useCallback(async () => {
-    console.log("[usePosLogic] Navigating home");
-    clearActiveOrder();
-    viewActions.navigateToHome();
-    menuActions.clearDisplayMenu();
-    await refreshData();
-  }, [clearActiveOrder, viewActions, menuActions, refreshData]);
-
-  // --- SELECT DINE-IN ---
-  const handleSelectDineIn = useCallback(() => {
-    console.log("[usePosLogic] Selected Dine-In");
-    viewActions.navigateToTableSelect();
-  }, [viewActions]);
-
-  // --- SELECT TABLE ---
-  const handleTableSelect = useCallback((table) => {
-    console.log(`[usePosLogic] Selected table: ${table.name} (Status: ${table.status})`);
-    if (table.status === 'OCCUPIED') {
-      resumeOrder(table);
-    } else {
-      startOrder('Dine-In', table.id);
-    }
-  }, [resumeOrder, startOrder]);
-
-  // --- Function to handle payment selection, now accepts type and optional customerId ---
-  const handleSelectPayment = useCallback((payments, type, customerId = null) => {
-     if (!activeOrder) {
-         console.error("[usePosLogic] Cannot select payment: No active order.");
-         return;
-     }
-     const selectedTotal = payments.reduce((sum, p) => sum + p.amount, 0);
-     if (Math.abs(selectedTotal - activeOrder.totalAmount) > 0.015) {
-        console.warn(`[usePosLogic] Payment selection total (${selectedTotal.toFixed(2)}) doesn't match current order total (${activeOrder.totalAmount.toFixed(2)}).`);
-        notifications.show({ title: 'Amount Mismatch', message: 'Order total may have changed. Please verify amounts.', color: 'yellow', autoClose: 5000 });
-     }
-
-    console.log("[usePosLogic] Payment method selected:", payments, "Type:", type, "Customer ID:", customerId);
-    setSelectedPaymentMethods(payments);
-    setPaymentSelectionType(type);
-    setSplitPaymentRequiresReconfirm(false);
-    setCreditSaleCustomerId(customerId); // <-- SET CUSTOMER ID
-    modalActions.closePaymentModal();
-  }, [modalActions, activeOrder]);
-
-  // --- START: MODIFIED finalizeOrder ---
-  const handleFinalizeOrder = useCallback(async () => {
-    if (!activeOrder || !selectedPaymentMethods) {
-        // --- UPDATED WARNING MESSAGE ---
-        notifications.show({ title: 'Warning', message: 'Please select payment method via Other payments.', color: 'yellow' });
-        return;
-    }
-    if (paymentSelectionType === 'split' && splitPaymentRequiresReconfirm) {
-        console.log("[usePosLogic] Split payment requires reconfirmation. Re-opening modal.");
-        modalActions.openPaymentModal({ initialTab: 'split' });
-        return;
-    }
-    
-    // --- Determine Final Payment Data ---
-    const isCreditSale = paymentSelectionType === 'credit';
-    const customerIdToCharge = isCreditSale ? creditSaleCustomerId : null;
-    let finalPayments = isCreditSale ? selectedPaymentMethods : [...selectedPaymentMethods];
-    
-    // Recalculate full payment for floating point safety
-    if (paymentSelectionType === 'full' && finalPayments.length === 1) {
-        finalPayments[0].amount = activeOrder.totalAmount;
-    }
-    
-    const finalTotalCheckAmount = finalPayments.reduce((sum, p) => sum + p.amount, 0);
-     if (Math.abs(finalTotalCheckAmount - activeOrder.totalAmount) > 0.015) {
-        console.error(`[usePosLogic] Finalization Mismatch: Payment total (${finalTotalCheckAmount.toFixed(2)}) vs Order total (${activeOrder.totalAmount.toFixed(2)}).`);
-        notifications.show({ title: 'Error: Amount Mismatch', message: 'Order total changed unexpectedly. Please re-select payment method.', color: 'red', autoClose: 7000 });
-        setSelectedPaymentMethods(null);
-        setPaymentSelectionType(null);
-        setSplitPaymentRequiresReconfirm(false);
-        setCreditSaleCustomerId(null);
-        return;
-     }
-    // --- End Determine Final Payment Data ---
-
-    const orderType = activeOrder.orderType;
-    const orderIdToFinalize = activeOrder.id;
-    try {
-      // Capture the finalized order object returned from the API
-      const finalizedOrder = await window.api.finalizeOrder({ 
-        orderId: orderIdToFinalize, 
-        payments: finalPayments, 
-        customerId: customerIdToCharge 
-      });
-      
-      // 1. UPDATED: Print must happen BEFORE state reset and after successful finalization
-      if (finalizedOrder) { 
-        console.log(`[usePosLogic] Order finalized, triggering print for ID: ${finalizedOrder.id}`);
-        await window.api.printReceipt(finalizedOrder.id);
-      }
-
-      // 2. Show Success
-      notifications.show({ title: 'Success', message: isCreditSale ? 'Order Charged to Account.' : 'Order finalized!', color: 'green' });
-
-      // 3. Reset State
-      clearActiveOrder();
-      if (orderType === 'Dine-In') await handleGoHome(); else await startOrder(orderType);
-      
-    } catch (err) {
-      console.error("[usePosLogic] Failed to finalize order:", err);
-      
-      // --- FIXED: Extract the clean error message and display it ---
-      // This extracts the specific message thrown by the backend (e.g., Credit limit exceeded)
-      const friendlyMessage = err.message.replace('Error invoking remote method "finalize-order": Error: ', '');
-      notifications.show({ 
-          title: 'Transaction Failed', 
-          message: friendlyMessage, 
-          color: 'red' 
-      });
-      
-      // Reset payment selection if a credit or amount validation error occurred
-      if (friendlyMessage.includes("Credit limit exceeded") || friendlyMessage.includes("does not match order total")) {
-            setSelectedPaymentMethods(null);
-            setPaymentSelectionType(null);
-            setSplitPaymentRequiresReconfirm(false);
-            setCreditSaleCustomerId(null);
-       }
-    }
-  }, [activeOrder, selectedPaymentMethods, paymentSelectionType, splitPaymentRequiresReconfirm, creditSaleCustomerId, modalActions, clearActiveOrder, handleGoHome, startOrder]);
-  // --- END: MODIFIED finalizeOrder ---
-
-
-  // --- START: MODIFIED handleFastCash ---
-  const handleFastCash = useCallback(async () => {
-     if (!activeOrder || !activeOrder.items || activeOrder.items.length === 0) return;
-    if (activeOrder.totalAmount < 0.001) {
-        notifications.show({ title: 'Info', message: 'Cannot Fast Cash a zero total order.', color: 'blue' });
-        return;
-    }
-    const cashPayment = [{ method: 'Cash', amount: activeOrder.totalAmount }];
-    const orderType = activeOrder.orderType;
-    const orderIdToFinalize = activeOrder.id;
-    try {
-        // Capture the finalized order object returned from the API
-        const finalizedOrder = await window.api.finalizeOrder({ orderId: orderIdToFinalize, payments: cashPayment, customerId: null });
-        notifications.show({ title: 'Success', message: 'Order paid in cash!', color: 'green' });
-
-        // --- ADDED PRINT CALL ---
-        if (finalizedOrder) {
-          console.log(`[usePosLogic] Fast Cash finalized, triggering print for ID: ${finalizedOrder.id}`);
-          await window.api.printReceipt(finalizedOrder.id);
-        }
-        // --- END PRINT CALL ---
-
-        clearActiveOrder();
-        if (orderType === 'Dine-In') await handleGoHome(); else await startOrder(orderType);
-    } catch (err) {
-        console.error("[usePosLogic] Fast cash failed:", err);
-        notifications.show({ title: 'Error', message: `Fast cash failed: ${err.message}`, color: 'red' });
-    }
-  }, [activeOrder, clearActiveOrder, handleGoHome, startOrder]);
-  // --- END: MODIFIED handleFastCash ---
-
-
-  // --- HOLD ORDER ---
   const handleHoldOrder = useCallback(async () => {
-     if (!activeOrder || !activeOrder.items || activeOrder.items.length === 0) return;
-    const orderIdToHold = activeOrder.id;
+    if (!activeOrder || !activeOrder.items?.length) return;
     const orderType = activeOrder.orderType;
     try {
-      await window.api.holdOrder({ orderId: orderIdToHold });
+      await window.api.holdOrder({ orderId: activeOrder.id });
       notifications.show({ title: 'Held', message: 'Order placed on hold.', color: 'blue' });
       clearActiveOrder();
       await startOrder(orderType);
     } catch (err) {
-      console.error("[usePosLogic - handleHoldOrder] Failed to hold order:", err);
       notifications.show({ title: 'Error', message: `Failed to hold order: ${err.message}`, color: 'red' });
     }
   }, [activeOrder, clearActiveOrder, startOrder]);
 
-  // --- CLEAR ORDER ---
   const handleClearOrder = useCallback(async () => {
-     if (!activeOrder || !activeOrder.items || activeOrder.items.length === 0) return;
-    const orderIdToClear = activeOrder.id;
+    if (!activeOrder) return;
     const orderType = activeOrder.orderType;
     if (window.confirm('Are you sure you want to clear this entire order?')) {
         try {
-            await window.api.clearOrder({ orderId: orderIdToClear });
-            notifications.show({ title: 'Cleared', message: 'Order has been cleared.', color: 'orange' });
-            clearActiveOrder();
-            await startOrder(orderType);
+            await window.api.clearOrder({ orderId: activeOrder.id });
+            clearActiveOrder(); 
+            await startOrder(orderType); 
+            notifications.show({ title: 'Cleared', message: 'Order cleared.', color: 'orange' });
         } catch (err) {
-            console.error("[usePosLogic] Failed to clear order:", err);
             notifications.show({ title: 'Error', message: `Failed to clear order: ${err.message}`, color: 'red' });
         }
     }
   }, [activeOrder, clearActiveOrder, startOrder]);
 
-  // --- Define handleHold wrapper ---
-  const handleHold = useCallback(() => {
-    console.log("[usePosLogic] handleHold action triggered.");
-    if (!activeOrder) {
-        console.log("[usePosLogic] No active order, showing held Takeaway orders.");
-        heldOrderActions.handleShowHeldOrders('Takeaway');
+  const handleSelectPayment = useCallback((payments, type, customerId = null) => {
+    if (!activeOrder) return;
+    const validation = validatePaymentTotal(payments, activeOrder.totalAmount);
+    if (!validation.isValid) {
+       notifications.show({ title: 'Amount Mismatch', message: 'Payment total does not match bill.', color: 'yellow' });
+    }
+    setSelectedPaymentMethods(payments);
+    setPaymentSelectionType(type);
+    setSplitPaymentRequiresReconfirm(false);
+    setCreditSaleCustomerId(customerId);
+    modalActions.closePaymentModal();
+  }, [modalActions, activeOrder]);
+
+  const handleFinalizeOrder = useCallback(async () => {
+    if (!activeOrder || !selectedPaymentMethods) {
+        notifications.show({ title: 'Warning', message: 'Please select payment method.', color: 'yellow' });
         return;
     }
-    if (!activeOrder.items || activeOrder.items.length === 0) {
-        console.log(`[usePosLogic] Active order is empty, showing held orders for type: ${activeOrder.orderType}`);
-        heldOrderActions.handleShowHeldOrders(activeOrder.orderType);
-    } else {
-        console.log("[usePosLogic] Active order has items, calling handleHoldOrder function.");
-        handleHoldOrder();
+    if (paymentSelectionType === 'split' && splitPaymentRequiresReconfirm) {
+        modalActions.openPaymentModal({ initialTab: 'split' });
+        return;
     }
-  }, [activeOrder, handleHoldOrder, heldOrderActions]);
+    const finalPayments = prepareFinalPayments(selectedPaymentMethods, activeOrder.totalAmount, paymentSelectionType);
+    try {
+      const finalizedOrder = await window.api.finalizeOrder({ 
+        orderId: activeOrder.id, payments: finalPayments, customerId: paymentSelectionType === 'credit' ? creditSaleCustomerId : null 
+      });
+      if (finalizedOrder) await window.api.printReceipt(finalizedOrder.id);
+      notifications.show({ title: 'Success', message: 'Order finalized!', color: 'green' });
+      const type = activeOrder.orderType;
+      clearActiveOrder();
+      if (type === 'Dine-In') { viewActions.navigateToHome(); await refreshData(); } else { startOrder(type); }
+    } catch (err) {
+      notifications.show({ title: 'Transaction Failed', message: err.message, color: 'red' });
+    }
+  }, [activeOrder, selectedPaymentMethods, paymentSelectionType, splitPaymentRequiresReconfirm, creditSaleCustomerId, modalActions, clearActiveOrder, refreshData, viewActions, startOrder]);
 
-  // --- RETURN VALUE ---
+  const handleFastCash = useCallback(async () => {
+    if (!activeOrder || !activeOrder.items?.length) return;
+    const total = parseFloat(activeOrder.totalAmount.toFixed(2));
+    const cashPayment = [{ method: 'Cash', amount: total }];
+    try {
+        const finalizedOrder = await window.api.finalizeOrder({ orderId: activeOrder.id, payments: cashPayment, customerId: null });
+        if (finalizedOrder) await window.api.printReceipt(finalizedOrder.id);
+        notifications.show({ title: 'Success', message: 'Paid in cash!', color: 'green' });
+        const type = activeOrder.orderType;
+        clearActiveOrder();
+        if (type === 'Dine-In') { viewActions.navigateToHome(); await refreshData(); } else { startOrder(type); }
+    } catch (err) {
+        notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    }
+  }, [activeOrder, clearActiveOrder, refreshData, viewActions, startOrder]);
+
   return {
-    // States
-    posView, activeOrder, tables, menu: currentDisplayMenu, heldOrders, discounts, paymentMethods, // <-- EXPOSED paymentMethods
-    isLoading, error, selectedItemId,
-    selectedPaymentMethods,
-    paymentSelectionType,
-    splitPaymentRequiresReconfirm,
-    creditSaleCustomerId,
-
-    // Modal States
-    modifierModalOpened, paymentModalOpened, heldOrdersModalOpened, commentModalOpened, discountModalOpened, keyboardVisible,
-    customizingProduct, commentTarget, discountTarget,
-    paymentModalInitialTab,
-
+    posView, activeOrder, tables, menu: currentDisplayMenu, paymentMethods,
+    isLoading, error: dataError, selectedItemId, selectedPaymentMethods, 
+    paymentSelectionType, splitPaymentRequiresReconfirm, creditSaleCustomerId,
+    modifierModalOpened, paymentModalOpened, heldOrdersModalOpened, 
+    commentModalOpened, discountModalOpened, keyboardVisible,
+    customizingProduct, commentTarget, discountTarget, paymentModalInitialTab,
+    heldOrders, discounts,
     actions: {
-      handleGoHome, handleSelectDineIn, setPosView: viewActions.setPosView,
-      startOrder, handleTableSelect,
+      // 1. Spread generic actions first
+      ...orderActions, 
+      ...heldOrderActions, 
+      ...modalActions,
 
-      // Item/Modifier actions
-      handleProductSelect: (product) => {
-        if (!activeOrder) {
-            console.error("[usePosLogic] Cannot add item: No active order found.");
-            notifications.show({ title: 'Error', message: 'Cannot add item, no active order.', color: 'red'});
-            return;
-        }
-        console.log(`[usePosLogic] Product selected: ${product.name}`);
-        if (!currentDisplayMenu.products.some(p => p.id === product.id)) {
-            console.warn("[usePosLogic] Selected product not found in current display menu.");
-            return;
-        }
-        if (product.modifierGroups && product.modifierGroups.length > 0) {
-            modalActions.handleOpenModifierModal(product);
-        } else {
-            orderActions.handleAddItem(product, []);
-        }
+      // 2. Define custom logic wrappers last so they are not overwritten
+      handleSelectDiscount: async (id) => { 
+          if (!activeOrder) return;
+          
+          console.log(`[LOGIC-HOOK] Received ID from Modal: ${id}`);
+
+          const currentId = activeOrder?.discountId;
+          const finalIdToApply = (id === currentId) ? null : id;
+
+          console.log(`[LOGIC-HOOK] Final Intent -> ID: ${finalIdToApply}`);
+
+          modalActions.handleCloseDiscountModal(); 
+          
+          // Call the order management handler with two arguments explicitly
+          await orderActions.handleSelectDiscount(activeOrder, finalIdToApply); 
       },
-      handleConfirmModifiers: (product, selectedModifiers) => {
-          if (!activeOrder) {
-             console.error("[usePosLogic] Cannot confirm modifiers: No active order found.");
-             return;
-          }
-          orderActions.handleAddItem(product, selectedModifiers);
-          modalActions.handleCloseModifierModal();
-      },
-      ...orderActions, // Expose remaining order actions
 
-      // Held/Resume actions
-      handleHold,
-      ...heldOrderActions,
-
-      // Payment actions
-      handleSelectPayment,
-      handleFinalizeOrder,
-      handleClearOrder,
+      startOrder, 
+      handleGoHome: async () => { clearActiveOrder(); viewActions.navigateToHome(); await refreshData(); },
+      handleTableSelect: (t) => t.status === 'OCCUPIED' ? heldOrderActions.resumeOrder(t) : startOrder('Dine-In', t.id),
+      handleProductSelect: (p) => p.modifierGroups?.length > 0 ? modalActions.handleOpenModifierModal(p) : orderActions.handleAddItem(p, []),
+      handleConfirmModifiers: (p, m) => { orderActions.handleAddItem(p, m); modalActions.handleCloseModifierModal(); },
+      handleHold: () => (!activeOrder || !activeOrder.items?.length) ? heldOrderActions.handleShowHeldOrders(activeOrder?.orderType || 'Takeaway') : handleHoldOrder(),
+      handleSaveComment: async (t, c) => { await orderActions.handleSaveComment(t, c); modalActions.handleCloseCommentModal(); },
+      handleSelectPayment, 
+      handleFinalizeOrder, 
+      handleClearOrder, 
       handleFastCash,
       refreshData,
-
-      // Wrapped Comment/Discount actions
-      handleSaveComment: async (target, comment) => {
-          if (!activeOrder) return;
-          await orderActions.handleSaveComment(target, comment);
-          modalActions.handleCloseCommentModal();
-      },
-      handleSelectDiscount: async (discountId) => {
-           if (!activeOrder) return;
-           const target = discountTarget || activeOrder;
-           await orderActions.handleSelectDiscount(target, discountId);
-           modalActions.handleCloseDiscountModal();
-      },
-
-      // Modal actions
-      ...modalActions
     }
   };
 }

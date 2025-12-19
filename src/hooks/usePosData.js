@@ -5,100 +5,106 @@ import { useState, useEffect, useCallback } from 'react';
 
 export function usePosData() {
   const [tables, setTables] = useState([]);
-  // --- MODIFIED: Store ALL active menu data (menus, categories, products) ---
+  
+  // Initialize with empty arrays to prevent mapping errors during initial render
   const [fullActiveMenuData, setFullActiveMenuData] = useState({
     menus: [],
     categories: [],
     products: [],
   });
-  const [posSettings, setPosSettings] = useState({}); // <-- State for POS settings
-  const [discounts, setDiscounts] = useState([]);
-  const [paymentMethods, setPaymentMethods] = useState([]); // <-- NEW STATE
+  
+  const [posSettings, setPosSettings] = useState({});
+  const [discounts, setDiscounts] = useState([]); 
+  const [paymentMethods, setPaymentMethods] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null); // <-- State for potential errors
+  const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
-    setError(null); // Clear previous errors
+    setError(null);
     try {
-      // Fetch all necessary data in parallel
+      // Fetch all necessary data in parallel from the main process API
       const [
         tableData,
         allProductData,
         allCategoryData,
         discountData,
         activeMenus,
-        settingsData, // <-- Fetch settings
-        paymentMethodData, // <-- NEW: Fetch payment methods
+        settingsData,
+        paymentMethodData,
       ] = await Promise.all([
         window.api.getTables(),
         window.api.getProducts(),
         window.api.getCategories(),
         window.api.getDiscounts(),
-        window.api.getMenus({ activeOnly: true }), // Fetch only active menus
-        window.api.getPosSettings(), // <-- Fetch POS settings
-        window.api.getPaymentMethods({ activeOnly: true }), // <-- NEW API CALL
+        window.api.getMenus({ activeOnly: true }),
+        window.api.getPosSettings(),
+        window.api.getPaymentMethods({ activeOnly: true }),
       ]);
 
-      setTables(tableData);
-      setDiscounts(discountData.filter((d) => d.isActive));
-      setPosSettings(settingsData); // <-- Store settings
-      setPaymentMethods(paymentMethodData); // <-- NEW: Store payment methods
+      // Defensive assignment: Ensure we always work with arrays even if database returns null
+      const safeProducts = Array.isArray(allProductData) ? allProductData : [];
+      const safeCategories = Array.isArray(allCategoryData) ? allCategoryData : [];
+      const safeDiscounts = Array.isArray(discountData) ? discountData : [];
+      const safeMenus = Array.isArray(activeMenus) ? activeMenus : [];
 
-      // --- Store all data related to active menus ---
-      if (activeMenus && activeMenus.length > 0) {
-        const activeMenuIds = activeMenus.map((m) => m.id);
+      setTables(tableData || []);
+      
+      // Store active discounts for the DiscountModal
+      setDiscounts(safeDiscounts.filter((d) => d.isActive));
+      
+      setPosSettings(settingsData || {});
+      setPaymentMethods(paymentMethodData || []);
 
-        // Filter categories belonging to any active menu
-        const activeCategories = allCategoryData.filter((cat) =>
+      // Process and filter active menu, category, and product relationships
+      if (safeMenus.length > 0) {
+        const activeMenuIds = safeMenus.map((m) => m.id);
+
+        const activeCategories = safeCategories.filter((cat) =>
           activeMenuIds.includes(cat.menuId)
         );
         const activeCategoryIds = activeCategories.map((cat) => cat.id);
 
-        // Filter products belonging to any active category
-        const activeProducts = allProductData.filter((prod) =>
+        const activeProducts = safeProducts.filter((prod) =>
           activeCategoryIds.includes(prod.categoryId)
         );
 
         setFullActiveMenuData({
-          menus: activeMenus,
+          menus: safeMenus,
           categories: activeCategories,
           products: activeProducts,
         });
-        console.log(`Loaded data for ${activeMenus.length} active menu(s).`);
       } else {
-        console.warn("No active menus found. POS will show no items.");
         setFullActiveMenuData({ menus: [], categories: [], products: [] });
       }
-      // --- End storing active menu data ---
 
     } catch (err) {
       console.error("Failed to fetch initial POS data:", err);
-      setError(`Failed to load POS data: ${err.message}`); // Store error message
-      // Ensure state is empty on error
+      setError(`Failed to load POS data: ${err.message}`);
+      
+      // Reset to empty states on error to prevent UI crashes in dependent components
       setFullActiveMenuData({ menus: [], categories: [], products: [] });
       setTables([]);
       setDiscounts([]);
-      setPaymentMethods([]); // <-- NEW: Clear on error
+      setPaymentMethods([]);
       setPosSettings({});
     } finally {
       setIsLoading(false);
     }
-  }, []); // Keep dependencies empty
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Expose the combined active menu data and settings
   return {
     tables,
-    fullActiveMenuData, // <-- Expose all active menu data
-    posSettings,        // <-- Expose settings
+    fullActiveMenuData,
+    posSettings,
     discounts,
-    paymentMethods,     // <-- NEW: Expose payment methods
+    paymentMethods,
     isLoading,
-    error,              // <-- Expose error state
+    error,
     refreshData: fetchData
   };
 }
