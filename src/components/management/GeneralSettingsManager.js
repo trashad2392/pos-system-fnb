@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { 
   TextInput, 
   NumberInput, 
-  Switch, 
   Button, 
   Stack, 
   Group, 
@@ -13,20 +12,21 @@ import {
   Title, 
   LoadingOverlay,
   Divider,
-  Text
+  Text,
+  ThemeIcon
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { IconInfoCircle } from '@tabler/icons-react';
 
 export default function GeneralSettingsManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
-  // Settings State with your requested defaults
+  // Settings State - Removed tax_inclusive
   const [settings, setSettings] = useState({
     currency_symbol: 'EGP',
     tax_label: 'VAT',
     tax_rate: 14,
-    tax_inclusive: true,
   });
 
   useEffect(() => {
@@ -36,15 +36,12 @@ export default function GeneralSettingsManager() {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      // Fetches all settings from the database via IPC
       const data = await window.api.getPosSettings();
       
-      // Update state if values exist, otherwise keep defaults
       setSettings({
         currency_symbol: data.currency_symbol || 'EGP',
         tax_label: data.tax_label || 'VAT',
         tax_rate: data.tax_rate !== undefined ? parseFloat(data.tax_rate) : 14,
-        tax_inclusive: data.tax_inclusive !== undefined ? data.tax_inclusive === 'true' : true,
       });
     } catch (error) {
       console.error("Failed to fetch settings:", error);
@@ -57,12 +54,12 @@ export default function GeneralSettingsManager() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      // Save all settings at once using the transaction-based IPC handler
+      // Save settings - We send currency, label, and rate. 
+      // The POS logic now ignores any existing 'tax_inclusive' database values.
       await window.api.setPosSettings({
         currency_symbol: settings.currency_symbol,
         tax_label: settings.tax_label,
         tax_rate: String(settings.tax_rate),
-        tax_inclusive: String(settings.tax_inclusive),
       });
       notifications.show({ title: 'Success', message: 'General settings updated successfully', color: 'green' });
     } catch (error) {
@@ -75,7 +72,6 @@ export default function GeneralSettingsManager() {
 
   return (
     <Paper withBorder p="md" pos="relative" radius="md">
-      {/* Fixed: overlayBlur moved into overlayProps to resolve React warning */}
       <LoadingOverlay 
         visible={loading} 
         overlayProps={{ blur: 2 }} 
@@ -109,21 +105,16 @@ export default function GeneralSettingsManager() {
         <Group grow align="flex-end">
           <NumberInput
             label="Tax Rate (%)"
-            description="Percentage to calculate"
+            description="Percentage built into item prices"
             decimalScale={2}
             min={0}
             max={100}
             value={settings.tax_rate}
             onChange={(val) => setSettings({ ...settings, tax_rate: val })}
           />
-          <Paper withBorder p="xs" radius="sm" style={{ flex: 1 }}>
-            <Switch
-              label="Prices include tax"
-              description="Inclusive: Tax is inside the price. Exclusive: Tax is added on top."
-              checked={settings.tax_inclusive}
-              onChange={(e) => setSettings({ ...settings, tax_inclusive: e.currentTarget.checked })}
-            />
-          </Paper>
+          
+            <Group gap="xs" wrap="nowrap">
+            </Group>
         </Group>
 
         <Divider mt="sm" />

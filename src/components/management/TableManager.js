@@ -5,7 +5,7 @@ import { Title, Box, TextInput, Table, Button, Paper, Group, ActionIcon, Modal }
 import { IconEdit, IconTrash, IconPlus } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 
-export default function TableManager({ tables, onDataChanged }) {
+export default function TableManager({ tables, onDataChanged, currencySymbol = '$ ' }) {
   const [newTableName, setNewTableName] = useState('');
   const [editingTable, setEditingTable] = useState(null);
   const [opened, { open, close }] = useDisclosure(false);

@@ -85,6 +85,7 @@ export default function PosPage() {
         onSelectPayment={actions.handleSelectPayment}
         initialTab={paymentModalInitialTab}
         paymentMethods={paymentMethods}
+        posSettings={posSettings}
       />
 
       <HeldOrdersModal

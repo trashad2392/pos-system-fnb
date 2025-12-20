@@ -32,9 +32,10 @@ export default function OrderView({
   const [keypadInput, setKeypadInput] = useState('');
   const isCartEmpty = !order || !order.items || order.items.length === 0;
 
-  // FIXED: Always append a space after the symbol for better visual spacing
-  const rawSymbol = posSettings?.currency_symbol || '$';
-  const currencySymbol = `${rawSymbol} `; 
+  // Currency and Tax Settings
+  const currencySymbol = `${posSettings?.currency_symbol || '$'} `;
+  const taxRate = posSettings?.tax_rate !== undefined ? parseFloat(posSettings.tax_rate) : 14;
+  const taxLabel = posSettings?.tax_label || 'Tax';
 
   useEffect(() => {
     setKeypadInput('');
@@ -67,7 +68,7 @@ export default function OrderView({
   };
 
   const calculateItemTotal = (item) => {
-    if (!item) return 0;
+    if (!item || item.status === 'VOIDED') return 0;
     const basePrice = item.priceAtTimeOfOrder || 0;
     const modifiersPrice = (item.selectedModifiers || []).reduce((acc, mod) => {
       const priceAdjustment = mod?.modifierOption?.priceAdjustment || 0;
@@ -77,20 +78,32 @@ export default function OrderView({
     return (basePrice + modifiersPrice) * (item.quantity || 0);
   };
 
-  const subtotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
+  // --- Financial Calculations (Strictly Tax Inclusive) ---
   
-  let totalDiscountValue = 0;
+  // 1. Items Gross Total (The sum of all active items in cart)
+  const itemsGrossTotal = order?.items?.reduce((sum, item) => sum + calculateItemTotal(item), 0) || 0;
+  
+  // 2. Order-level Discount (Calculated on the gross total)
+  let orderDiscountValue = 0;
   if (order?.discount) {
     const minAmount = order.discount.minimumOrderAmount || 0;
-    if (subtotal >= minAmount) {
+    if (itemsGrossTotal >= minAmount) {
       if (order.discount.type === 'PERCENT') {
-        totalDiscountValue = subtotal * (order.discount.value / 100);
+        orderDiscountValue = itemsGrossTotal * (order.discount.value / 100);
       } else {
-        totalDiscountValue = order.discount.value;
+        orderDiscountValue = order.discount.value;
       }
-      totalDiscountValue = Math.min(subtotal, totalDiscountValue);
+      orderDiscountValue = Math.min(itemsGrossTotal, orderDiscountValue);
     }
   }
+
+  // 3. Final Grand Total (Gross - Discount)
+  const grandTotal = Math.max(0, itemsGrossTotal - orderDiscountValue);
+
+  // 4. Derive Tax and Net Subtotal from the Grand Total
+  // Formula: Tax = Total - (Total / (1 + Rate))
+  const taxAmount = grandTotal - (grandTotal / (1 + (taxRate / 100)));
+  const displaySubtotal = grandTotal - taxAmount;
 
   const formatPaymentMethods = (methods) => {
     if (!methods || methods.length === 0) return null;
@@ -171,22 +184,26 @@ export default function OrderView({
             <Box p="xs" pt={0}>
                 <Divider my="xs" />
                 
-                {totalDiscountValue > 0.001 && (
-                <>
-                    <Group justify="space-between">
-                      <Text size="sm">Subtotal:</Text>
-                      <Text size="sm">{currencySymbol}{subtotal.toFixed(2)}</Text>
-                    </Group>
-                    <Group justify="space-between">
-                      <Text size="sm" c="red">Discount:</Text>
-                      <Text size="sm" c="red">- {currencySymbol}{totalDiscountValue.toFixed(2)}</Text>
-                    </Group>
-                </>
+                <Group justify="space-between">
+                  <Text size="sm">Subtotal (Net):</Text>
+                  <Text size="sm">{currencySymbol}{displaySubtotal.toFixed(2)}</Text>
+                </Group>
+
+                <Group justify="space-between">
+                  <Text size="sm">{taxLabel} ({taxRate}%):</Text>
+                  <Text size="sm">{currencySymbol}{taxAmount.toFixed(2)}</Text>
+                </Group>
+
+                {orderDiscountValue > 0.001 && (
+                  <Group justify="space-between">
+                    <Text size="sm" c="red">Discount:</Text>
+                    <Text size="sm" c="red">- {currencySymbol}{orderDiscountValue.toFixed(2)}</Text>
+                  </Group>
                 )}
                 
-                <Group justify="space-between" mb="xs">
+                <Group justify="space-between" mb="xs" mt="xs">
                     <Title order={3}>Total:</Title>
-                    <Title order={3}>{currencySymbol}{Number(order?.totalAmount || 0).toFixed(2)}</Title>
+                    <Title order={3}>{currencySymbol}{grandTotal.toFixed(2)}</Title>
                 </Group>
 
                 <Button

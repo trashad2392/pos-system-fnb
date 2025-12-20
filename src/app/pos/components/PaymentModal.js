@@ -1,216 +1,237 @@
 // src/app/pos/components/PaymentModal.js
 "use client";
 
+import { Modal, Tabs, Button, Group, Text, Title, Paper, Stack, Divider, Alert, Box } from '@mantine/core';
+import { IconCash, IconCreditCard, IconUsers, IconAlertCircle } from '@tabler/icons-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Modal, Title, Text, Button, Group, Divider, Tabs, Box } from '@mantine/core';
-import * as TablerIcons from '@tabler/icons-react';
-import { notifications } from '@mantine/notifications';
-
-// New Modular Imports
 import FullPaymentTab from './payment/FullPaymentTab';
 import SplitPaymentTab from './payment/SplitPaymentTab';
 import CreditSaleTab from './payment/CreditSaleTab';
 
-function formatCurrency(amount) {
-    return `$${Number(amount).toFixed(2)}`;
-}
-
-export default function PaymentModal({ opened, onClose, order, onSelectPayment, initialTab = 'full', paymentMethods = [] }) {
-    const [splitAmounts, setSplitAmounts] = useState({});
+export default function PaymentModal({ 
+    order, 
+    opened, 
+    onClose, 
+    onSelectPayment, 
+    initialTab = 'full', 
+    paymentMethods = [],
+    posSettings // Received from PosPage
+}) {
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [activeSplitMethod, setActiveSplitMethod] = useState('Card');
+    const [splitAmounts, setSplitAmounts] = useState({});
+    const [activeSplitMethod, setActiveSplitMethod] = useState(null);
     const [keypadInput, setKeypadInput] = useState('');
 
-    const [companies, setCompanies] = useState([]);
-    const [allCustomers, setAllCustomers] = useState([]);
-    const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+    // Dynamic Currency Symbol with mandatory space
+    const currencySymbol = `${posSettings?.currency_symbol || '$'} `;
+
+    // Credit Sale State
+    const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [selectedCustomerId, setSelectedCustomerId] = useState(null);
-    const [customerCreditStatus, setCustomerCreditStatus] = useState(null);
+    const [companies, setCompanies] = useState([]);
+    const [customers, setCustomers] = useState([]);
 
-    const totalAmount = useMemo(() => order?.totalAmount || 0, [order?.totalAmount]);
-
-    const remainingAmount = useMemo(() => {
-        const totalPaid = Object.values(splitAmounts).reduce((sum, amount) => sum + (amount || 0), 0);
-        return parseFloat((totalAmount - totalPaid).toFixed(2));
-    }, [splitAmounts, totalAmount]);
-
-    const payInFullMethods = useMemo(() =>
-        paymentMethods.filter(p => p.isActive).sort((a, b) => a.displayOrder - b.displayOrder),
-        [paymentMethods]
-    );
-
-    const displayedSplitMethods = useMemo(() =>
-        paymentMethods.filter(p => p.isActive && p.name !== 'Credit').sort((a, b) => a.displayOrder - b.displayOrder),
-        [paymentMethods]
-    );
-
-    const selectableSplitMethods = useMemo(() =>
-        paymentMethods.filter(p => p.isActive && p.name !== 'Cash' && p.name !== 'Credit').sort((a, b) => a.displayOrder - b.displayOrder),
-        [paymentMethods]
-    );
-
-    const filteredCreditCustomers = useMemo(() => {
-        const activeCustomers = allCustomers.filter(c => c.isActive);
-        if (!selectedCompanyId || selectedCompanyId === '') {
-            return activeCustomers.filter(c => c.companyId === null);
-        }
-        return activeCustomers.filter(c => c.companyId === Number(selectedCompanyId));
-    }, [allCustomers, selectedCompanyId]);
-
-    const companyOptions = useMemo(() => [
-        { value: '', label: 'Individual Accounts' },
-        ...companies.map(c => ({ value: c.id.toString(), label: c.name }))
-    ], [companies]);
-
-    const fetchCreditData = useCallback(async () => {
-        if (!opened || !order) return;
-        try {
-            const orderTotal = order.totalAmount;
-            const companyData = await window.api.getCompanies();
-            const rawCustomerData = await window.api.getCustomers();
-            const creditStatusPromises = rawCustomerData.map(c =>
-                window.api.getCustomerCreditStatus(c.id).then(status => {
-                    const theoreticalNewBalance = status.balance - orderTotal;
-                    const willExceed = status.creditLimit > 0 &&
-                        theoreticalNewBalance < 0 &&
-                        Math.abs(theoreticalNewBalance) > status.creditLimit;
-                    return { ...c, creditStatus: status, willExceedLimit: willExceed };
-                })
-            );
-            const customersWithStatus = await Promise.all(creditStatusPromises);
-            setCompanies(companyData);
-            setAllCustomers(customersWithStatus);
-            setSelectedCompanyId('');
-        } catch (error) {
-            notifications.show({ title: 'Error', message: 'Failed to load credit accounts.', color: 'red' });
-        }
-    }, [opened, order]);
-
+    // Reset tab and state when opened
     useEffect(() => {
-        const selected = allCustomers.find(c => c.id === Number(selectedCustomerId));
-        setCustomerCreditStatus(selected ? { ...selected.creditStatus, willExceedLimit: selected.willExceedLimit } : null);
-    }, [selectedCustomerId, allCustomers]);
-
-    useEffect(() => {
-        if (opened && order && paymentMethods.length > 0) {
-            const initialAmounts = paymentMethods.reduce((acc, method) => {
-                acc[method.name] = 0;
-                return acc;
-            }, {});
-            if (initialAmounts['Cash'] !== undefined) initialAmounts.Cash = parseFloat(totalAmount.toFixed(2));
-            setSplitAmounts(initialAmounts);
+        if (opened) {
             setActiveTab(initialTab);
-            setActiveSplitMethod(selectableSplitMethods[0]?.name || 'Card');
+            setSplitAmounts({});
+            setActiveSplitMethod(null);
             setKeypadInput('');
             setSelectedCustomerId(null);
+        }
+    }, [initialTab, opened]);
+
+    // Fetch Companies and Customers for Credit Sale
+    useEffect(() => {
+        if (opened && activeTab === 'credit') {
+            const fetchCreditData = async () => {
+                try {
+                    const [companyData, customerData] = await Promise.all([
+                        window.api.getCompanies(),
+                        window.api.getCustomers()
+                    ]);
+                    setCompanies(companyData);
+                    setCustomers(customerData);
+                } catch (err) {
+                    console.error("Failed to load credit data", err);
+                }
+            };
             fetchCreditData();
         }
-    }, [opened, order, totalAmount, initialTab, paymentMethods, selectableSplitMethods, fetchCreditData]);
+    }, [opened, activeTab]);
 
-    useEffect(() => {
-        if (activeTab === 'split' && activeSplitMethod !== 'Cash') {
-            const numericValue = parseInt(keypadInput || '0', 10) / 100;
-            handleSplitAmountChange(activeSplitMethod, numericValue);
-        }
-    }, [keypadInput, activeTab, activeSplitMethod]);
+    const payInFullMethods = useMemo(() => 
+        paymentMethods.filter(m => m.name !== 'Credit' && m.isActive), 
+    [paymentMethods]);
 
-    const handleSinglePaymentSelect = (method) => {
-        onSelectPayment([{ method, amount: totalAmount }], 'full');
+    const splitEnabledMethods = useMemo(() => 
+        paymentMethods.filter(m => m.name !== 'Credit' && m.isActive), 
+    [paymentMethods]);
+
+    // Keypad Logic for Split Payment
+    const handleNumberPress = (num) => {
+        if (!activeSplitMethod) return;
+        
+        const currentVal = keypadInput === '0' ? '' : keypadInput;
+        const newVal = (currentVal + num).slice(0, 8);
+        setKeypadInput(newVal);
+        
+        const amount = parseFloat(newVal) || 0;
+        setSplitAmounts(prev => ({
+            ...prev,
+            [activeSplitMethod]: amount
+        }));
     };
 
-    const handleCreditSaleConfirm = () => {
-        if (!selectedCustomerId) return notifications.show({ title: 'Error', message: 'Please select a customer account.', color: 'red' });
-        if (allCustomers.find(c => c.id === Number(selectedCustomerId))?.willExceedLimit) {
-            return notifications.show({ title: 'Error', message: 'Cannot charge: Transaction would exceed credit limit.', color: 'red' });
-        }
-        onSelectPayment([{ method: 'Credit', amount: totalAmount, customerId: selectedCustomerId }], 'credit', selectedCustomerId);
+    const handleBackspace = () => {
+        if (!activeSplitMethod) return;
+        
+        const newVal = keypadInput.slice(0, -1);
+        setKeypadInput(newVal);
+        
+        const amount = newVal === '' ? 0 : (parseFloat(newVal) || 0);
+        setSplitAmounts(prev => ({
+            ...prev,
+            [activeSplitMethod]: amount
+        }));
     };
 
-    const handleSplitAmountChange = (method, value) => {
-        const newAmount = Math.max(0, value || 0);
-        setSplitAmounts(prev => {
-            const otherTotal = Object.entries(prev).reduce((sum, [key, val]) => (key !== 'Cash' && key !== 'Credit' && key !== method) ? sum + val : sum, 0);
-            const clamped = parseFloat(Math.min(newAmount, totalAmount - otherTotal).toFixed(2));
-            return { ...prev, [method]: clamped, Cash: parseFloat(Math.max(0, totalAmount - (otherTotal + clamped)).toFixed(2)) };
-        });
+    const handleClear = () => {
+        if (!activeSplitMethod) return;
+        setKeypadInput('');
+        setSplitAmounts(prev => ({
+            ...prev,
+            [activeSplitMethod]: 0
+        }));
     };
 
-    const selectSplitMethod = (method) => {
-        setActiveSplitMethod(method);
-        const currentVal = ((splitAmounts[method] ?? 0) * 100).toFixed(0);
-        setKeypadInput(currentVal === '0' ? '' : currentVal);
-    };
+    const totalSplitAssigned = Object.values(splitAmounts).reduce((a, b) => a + b, 0);
+    const remainingToAssign = Math.max(0, (order?.totalAmount || 0) - totalSplitAssigned);
 
     const handleConfirmSplit = () => {
         const payments = Object.entries(splitAmounts)
-            .filter(([_, amount]) => amount > 0.001)
-            .map(([method, amount]) => ({ method, amount: parseFloat(amount.toFixed(2)) }));
+            .filter(([_, amt]) => amt > 0)
+            .map(([method, amount]) => ({ method, amount }));
+        
         onSelectPayment(payments, 'split');
     };
 
-    if (!order) return null;
+    const handleConfirmCredit = () => {
+        if (selectedCustomerId) {
+            onSelectPayment([{ method: 'Credit', amount: order.totalAmount }], 'credit', selectedCustomerId);
+        }
+    };
+
+    const formatCurrency = (amt) => `${currencySymbol}${Number(amt).toFixed(2)}`;
 
     return (
-        <Modal opened={opened} onClose={onClose} title="Select Payment Method" size="lg" centered>
-            <Group justify="space-between" mb="md">
-                <Box>
-                    <Text size="lg">Total Due:</Text>
-                    <Title order={1}>${totalAmount.toFixed(2)}</Title>
-                </Box>
-            </Group>
-            <Divider my="md" />
-
+        <Modal 
+            opened={opened} 
+            onClose={onClose} 
+            title={<Title order={3}>Payment: {formatCurrency(order?.totalAmount || 0)}</Title>}
+            size="70%"
+            padding="xl"
+            closeOnClickOutside={false}
+        >
             <Tabs value={activeTab} onChange={setActiveTab}>
-                <Tabs.List grow>
-                    <Tabs.Tab value="full">Pay in Full</Tabs.Tab>
-                    <Tabs.Tab value="split">Split Payment</Tabs.Tab>
-                    <Tabs.Tab value="credit">Credit Sale</Tabs.Tab>
+                <Tabs.List grow mb="md">
+                    <Tabs.Tab value="full" leftSection={<IconCash size={18} />}>
+                        Pay in Full
+                    </Tabs.Tab>
+                    <Tabs.Tab value="split" leftSection={<IconCreditCard size={18} />}>
+                        Split Payment
+                    </Tabs.Tab>
+                    <Tabs.Tab value="credit" leftSection={<IconUsers size={18} />}>
+                        Credit Sale
+                    </Tabs.Tab>
                 </Tabs.List>
 
-                <Tabs.Panel value="full" pt="md">
-                    <FullPaymentTab payInFullMethods={payInFullMethods} onSelectPayment={handleSinglePaymentSelect} />
+                {/* 1. Full Payment Tab */}
+                <Tabs.Panel value="full">
+                    <FullPaymentTab 
+                        payInFullMethods={payInFullMethods}
+                        onSelectPayment={(methodName) => onSelectPayment([{ method: methodName, amount: order.totalAmount }], 'full')}
+                    />
                 </Tabs.Panel>
 
-                <Tabs.Panel value="split" pt="md">
-                    <SplitPaymentTab
-                        displayedSplitMethods={displayedSplitMethods}
+                {/* 2. Split Payment Tab */}
+                <Tabs.Panel value="split">
+                    <SplitPaymentTab 
+                        displayedSplitMethods={splitEnabledMethods}
                         activeSplitMethod={activeSplitMethod}
                         splitAmounts={splitAmounts}
-                        selectSplitMethod={selectSplitMethod}
-                        onNumberPress={(n) => setKeypadInput(prev => (prev + n).slice(0, 8))}
-                        onBackspace={() => setKeypadInput(prev => prev.slice(0, -1))}
-                        onClear={() => setKeypadInput('')}
+                        selectSplitMethod={(methodName) => {
+                            setActiveSplitMethod(methodName);
+                            setKeypadInput(splitAmounts[methodName]?.toString() || '');
+                        }}
+                        onNumberPress={handleNumberPress}
+                        onBackspace={handleBackspace}
+                        onClear={handleClear}
+                        currencySymbol={currencySymbol}
                     />
+
+                    <Divider my="md" />
+
+                    <Group justify="space-between">
+                        <Stack gap={0}>
+                            <Text size="sm" c={remainingToAssign > 0.01 ? 'orange' : 'dimmed'}>
+                                Remaining: {formatCurrency(remainingToAssign)}
+                            </Text>
+                            <Text size="sm" fw={700}>
+                                Total Assigned: {formatCurrency(totalSplitAssigned)}
+                            </Text>
+                        </Stack>
+                        
+                        <Button 
+                            size="lg" 
+                            disabled={Math.abs(remainingToAssign) > 0.01}
+                            onClick={handleConfirmSplit}
+                            color="blue"
+                        >
+                            Confirm Split Payment
+                        </Button>
+                    </Group>
+                    
+                    {remainingToAssign > 0.01 && (
+                        <Alert icon={<IconAlertCircle size={16} />} color="orange" mt="sm" variant="light">
+                            Assigned amounts must match the total bill exactly.
+                        </Alert>
+                    )}
                 </Tabs.Panel>
 
-                <Tabs.Panel value="credit" pt="md">
-                    <CreditSaleTab
-                        companyOptions={companyOptions}
+                {/* 3. Credit Sale Tab */}
+                <Tabs.Panel value="credit">
+                    <CreditSaleTab 
+                        companyOptions={[
+                            { value: '', label: 'Individual Accounts' },
+                            ...companies.map(c => ({ value: c.id.toString(), label: c.name }))
+                        ]}
                         selectedCompanyId={selectedCompanyId}
                         setSelectedCompanyId={setSelectedCompanyId}
-                        filteredCreditCustomers={filteredCreditCustomers}
+                        filteredCreditCustomers={customers.filter(c => {
+                            if (selectedCompanyId === '') return !c.companyId;
+                            return c.companyId === parseInt(selectedCompanyId, 10);
+                        })}
                         selectedCustomerId={selectedCustomerId}
                         setSelectedCustomerId={setSelectedCustomerId}
-                        customerCreditStatus={customerCreditStatus}
+                        customerCreditStatus={customers.find(c => c.id === selectedCustomerId)}
                         formatCurrency={formatCurrency}
                     />
+
+                    <Box mt="xl">
+                        <Button 
+                            fullWidth 
+                            size="lg" 
+                            disabled={!selectedCustomerId}
+                            onClick={handleConfirmCredit}
+                            color="indigo"
+                        >
+                            Finalize Credit Sale
+                        </Button>
+                    </Box>
                 </Tabs.Panel>
             </Tabs>
-
-            {(activeTab === 'split' || activeTab === 'credit') && (
-                <>
-                    <Divider my="xl" />
-                    <Button
-                        fullWidth size="xl" h={70}
-                        onClick={activeTab === 'credit' ? handleCreditSaleConfirm : handleConfirmSplit}
-                        disabled={activeTab === 'split' ? Math.abs(remainingAmount) > 0.01 : !selectedCustomerId}
-                        color={activeTab === 'credit' ? 'orange' : 'blue'}
-                        leftSection={<TablerIcons.IconCheck size={24} />}
-                    >
-                        <Title order={3}>{activeTab === 'credit' ? 'Charge to Account' : 'Confirm Split'}</Title>
-                    </Button>
-                </>
-            )}
         </Modal>
     );
 }

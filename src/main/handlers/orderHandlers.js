@@ -151,6 +151,37 @@ async function getStatsForPeriod(startDate, endDate) {
 }
 
 function setupOrderHandlers() {
+  // 1. Handler to fetch a single order by ID for the UI
+  ipcMain.handle('get-order-by-id', async (e, orderId) => {
+    try {
+      return await getUpdatedOrder(prisma, orderId); // Make sure getUpdatedOrder helper exists
+    } catch (error) {
+      console.error("Error fetching order:", error);
+      throw error;
+    }
+  });
+
+  // 2. Handler to update order fields (totalAmount, subtotal, etc.)
+  ipcMain.handle('update-order', async (e, { orderId, updates }) => {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // 🔥 FIX: Destructure subtotal out so it isn't passed to Prisma, 
+        // as it doesn't exist in your schema.
+        const { subtotal, ...validPrismaFields } = updates;
+
+        await tx.order.update({
+          where: { id: parseInt(orderId, 10) },
+          data: validPrismaFields, 
+        });
+
+        // Return the fully populated order to the UI
+        return await getUpdatedOrder(tx, orderId);
+      });
+    } catch (error) {
+      console.error("Error updating order:", error);
+      throw error;
+    }
+  });
 
   ipcMain.handle('void-order-item', async (e, { orderItemId, voidType }) => {
     return prisma.$transaction(async (tx) => {

@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   // Image Upload
   uploadImage: () => ipcRenderer.invoke('upload-image'),
-  saveIconImage: (data) => ipcRenderer.invoke('save-icon-image', data), // 🔥 FIX: Exposed new handler
+  saveIconImage: (data) => ipcRenderer.invoke('save-icon-image', data),
 
   // Product Functions
   getProducts: () => ipcRenderer.invoke('get-products'),
@@ -19,10 +19,20 @@ contextBridge.exposeInMainWorld('api', {
   getSalesComparison: (range) => ipcRenderer.invoke('get-sales-comparison', range),
   getDailySalesForRange: (range) => ipcRenderer.invoke('get-daily-sales-for-range', range),
   createOrder: (data) => ipcRenderer.invoke('create-order', data),
+  getOrderById: (orderId) => ipcRenderer.invoke('get-order-by-id', orderId), // 🔥 Added for useOrderManagement
   getOpenOrderForTable: (tableId) => ipcRenderer.invoke('get-open-order-for-table', tableId),
+  
+  // Order Item Mappings
+  // 🔥 Fixed naming mismatch: UI calls addOrderItem, updateOrderItem, and removeOrderItem
+  addOrderItem: (data) => ipcRenderer.invoke('add-item-to-order', data),
+  updateOrderItem: (data) => ipcRenderer.invoke('update-item-quantity', data),
+  removeOrderItem: (id) => ipcRenderer.invoke('remove-item-from-order', id),
+  
   addItemToOrder: (data) => ipcRenderer.invoke('add-item-to-order', data),
   updateItemQuantity: (data) => ipcRenderer.invoke('update-item-quantity', data),
   removeItemFromOrder: (data) => ipcRenderer.invoke('remove-item-from-order', data),
+  
+  updateOrder: (data) => ipcRenderer.invoke('update-order', data), // 🔥 Added for useOrderManagement total updates
   finalizeOrder: (data) => ipcRenderer.invoke('finalize-order', data),
   voidOrderItem: (data) => ipcRenderer.invoke('void-order-item', data),
   voidFullOrder: (data) => ipcRenderer.invoke('void-full-order', data),
@@ -38,7 +48,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Category Functions
   getCategories: () => ipcRenderer.invoke('get-categories'),
-  addCategory: (data) => ipcRenderer.invoke('add-category', data), // Expects { name, menuId }
+  addCategory: (data) => ipcRenderer.invoke('add-category', data), 
   updateCategory: (data) => ipcRenderer.invoke('update-category', data),
   deleteCategory: (id) => ipcRenderer.invoke('delete-category', id),
 
@@ -94,17 +104,16 @@ contextBridge.exposeInMainWorld('api', {
   // Setting Functions
   getPosSettings: () => ipcRenderer.invoke('get-pos-settings'),
   getPosSetting: (key) => ipcRenderer.invoke('get-pos-setting', key),
-  setPosSetting: (data) => ipcRenderer.invoke('set-pos-setting', data), // Expects { key, value }
-  setPosSettings: (settingsMap) => ipcRenderer.invoke('set-pos-settings', settingsMap), // Expects { key1: value1, ... }
+  setPosSetting: (data) => ipcRenderer.invoke('set-pos-setting', data), 
+  setPosSettings: (settingsMap) => ipcRenderer.invoke('set-pos-settings', settingsMap), 
 
-  // --- NEW: Payment Method Functions ---
+  // Payment Method Functions
   getPaymentMethods: (options) => ipcRenderer.invoke('get-payment-methods', options),
   addPaymentMethod: (data) => ipcRenderer.invoke('add-payment-method', data),
   updatePaymentMethod: (data) => ipcRenderer.invoke('update-payment-method', data),
   deletePaymentMethod: (id) => ipcRenderer.invoke('delete-payment-method', id),
-  // --- END NEW ---
 
-  // Customer & Company Functions (Credit Sale)
+  // Customer & Company Functions
   getCompanies: () => ipcRenderer.invoke('get-companies'),
   addCompany: (data) => ipcRenderer.invoke('add-company', data),
   updateCompany: (data) => ipcRenderer.invoke('update-company', data),
@@ -112,7 +121,7 @@ contextBridge.exposeInMainWorld('api', {
   addCustomer: (data) => ipcRenderer.invoke('add-customer', data),
   updateCustomer: (data) => ipcRenderer.invoke('update-customer', data),
   deleteCustomer: (id) => ipcRenderer.invoke('delete-customer', id), 
-  addCustomerPayment: (data) => ipcRenderer.invoke('add-customer-payment', data), // { customerId, amount, method }
+  addCustomerPayment: (data) => ipcRenderer.invoke('add-customer-payment', data), 
   getCustomerCreditStatus: (customerId) => ipcRenderer.invoke('get-customer-credit-status', customerId),
 
   // Printing Functions

@@ -11,7 +11,8 @@ export default function SplitPaymentTab({
     selectSplitMethod,
     onNumberPress,
     onBackspace,
-    onClear
+    onClear,
+    currencySymbol = '$ ' // Added prop
 }) {
     return (
         <Grid>
@@ -32,7 +33,7 @@ export default function SplitPaymentTab({
                                 >
                                     <Group justify="space-between">
                                         <Text fw={500} c={isEditable ? 'inherit' : 'dimmed'}>{method.name}</Text>
-                                        <Text fw={700}>${(splitAmounts[method.name] || 0).toFixed(2)}</Text>
+                                        <Text fw={700}>{currencySymbol}{(splitAmounts[method.name] || 0).toFixed(2)}</Text>
                                     </Group>
                                 </Paper>
                             </UnstyledButton>
