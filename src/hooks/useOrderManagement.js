@@ -97,8 +97,8 @@ export function useOrderManagement() {
         const newItem = await window.api.addOrderItem({
           orderId: activeOrder.id,
           productId: product.id,
-          priceAtTimeOfOrder: product.price,
-          modifiers
+          // FIX: Backend expects 'selectedModifiers', not 'modifiers'
+          selectedModifiers: modifiers 
         });
         
         // Use the newly fetched item plus existing items for accurate total
@@ -114,7 +114,13 @@ export function useOrderManagement() {
     handleUpdateItemQuantity: async (itemId, quantity) => {
       if (!activeOrder || quantity < 1) return;
       try {
-        await window.api.updateOrderItem({ orderItemId: itemId, updates: { quantity } });
+        // FIX: Match backend signature expected: { orderId, orderItemId, quantity }
+        await window.api.updateOrderItem({ 
+          orderId: activeOrder.id, 
+          orderItemId: itemId, 
+          quantity 
+        });
+
         const updatedItems = activeOrder.items.map(item => 
           item.id === itemId ? { ...item, quantity } : item
         );
@@ -128,7 +134,12 @@ export function useOrderManagement() {
     handleRemoveItem: async (itemId) => {
       if (!activeOrder) return;
       try {
-        await window.api.removeOrderItem(itemId);
+        // FIX: Provide object matching what backend expects
+        await window.api.removeOrderItem({ 
+          orderId: activeOrder.id, 
+          orderItemId: itemId 
+        });
+
         const updatedItems = activeOrder.items.filter(item => item.id !== itemId);
         const { totalAmount } = calculateTotals({ ...activeOrder, items: updatedItems }, posSettings);
         if (selectedItemId === itemId) setSelectedItemId(null);
@@ -153,13 +164,25 @@ export function useOrderManagement() {
     handleSelectItem: (itemId) => setSelectedItemId(itemId === selectedItemId ? null : itemId),
     
     handleSaveComment: async (target, comment) => {
-      if (target.productId) {
-        await window.api.updateOrderItem({ orderItemId: target.id, updates: { comment } });
-      } else {
-        await window.api.updateOrder({ orderId: target.id, updates: { comment } });
+      try {
+        // FIX: Separate out item vs. order comments based on expected preload.js mapping
+        if (target.productId) {
+          await window.api.updateItemComment({ 
+            orderId: activeOrder.id, 
+            orderItemId: target.id, 
+            comment 
+          });
+        } else {
+          await window.api.updateOrderComment({ 
+            orderId: activeOrder.id, 
+            comment 
+          });
+        }
+        const updatedOrder = await window.api.getOrderById(activeOrder.id);
+        setActiveOrder(updatedOrder);
+      } catch (err) {
+        notifications.show({ title: 'Error', message: err.message, color: 'red' });
       }
-      const updatedOrder = await window.api.getOrderById(activeOrder.id);
-      setActiveOrder(updatedOrder);
     }
   };
 
