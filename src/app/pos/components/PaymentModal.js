@@ -1,9 +1,9 @@
 // src/app/pos/components/PaymentModal.js
 "use client";
 
-import { Modal, Tabs, Button, Group, Text, Title, Paper, Stack, Divider, Alert, Box } from '@mantine/core';
-import { IconCash, IconCreditCard, IconUsers, IconAlertCircle } from '@tabler/icons-react';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Modal, Tabs, Button, Group, Text, Title, Paper, Stack, Divider, Box } from '@mantine/core';
+import { IconCash, IconCreditCard, IconUsers } from '@tabler/icons-react';
+import { useState, useEffect, useMemo } from 'react';
 import FullPaymentTab from './payment/FullPaymentTab';
 import SplitPaymentTab from './payment/SplitPaymentTab';
 import CreditSaleTab from './payment/CreditSaleTab';
@@ -15,34 +15,35 @@ export default function PaymentModal({
     onSelectPayment, 
     initialTab = 'full', 
     paymentMethods = [],
-    posSettings // Received from PosPage
+    posSettings 
 }) {
     const [activeTab, setActiveTab] = useState(initialTab);
     const [splitAmounts, setSplitAmounts] = useState({});
     const [activeSplitMethod, setActiveSplitMethod] = useState(null);
     const [keypadInput, setKeypadInput] = useState('');
 
-    // Dynamic Currency Symbol with mandatory space
     const currencySymbol = `${posSettings?.currency_symbol || '$'} `;
 
-    // Credit Sale State
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [selectedCustomerId, setSelectedCustomerId] = useState(null);
     const [companies, setCompanies] = useState([]);
     const [customers, setCustomers] = useState([]);
 
-    // Reset tab and state when opened
+    // Fully reset the splitAmounts object whenever the modal opens or the order changes
     useEffect(() => {
         if (opened) {
             setActiveTab(initialTab);
-            setSplitAmounts({});
             setActiveSplitMethod(null);
             setKeypadInput('');
             setSelectedCustomerId(null);
-        }
-    }, [initialTab, opened]);
 
-    // Fetch Companies and Customers for Credit Sale
+            // Fresh state: All value defaults to Cash
+            setSplitAmounts({
+                'Cash': order?.totalAmount || 0
+            });
+        }
+    }, [initialTab, opened, order?.id, order?.totalAmount]);
+
     useEffect(() => {
         if (opened && activeTab === 'credit') {
             const fetchCreditData = async () => {
@@ -69,45 +70,70 @@ export default function PaymentModal({
         paymentMethods.filter(m => m.name !== 'Credit' && m.isActive), 
     [paymentMethods]);
 
-    // Keypad Logic for Split Payment
+    // Cap the keypad input so it never exceeds the total order amount
     const handleNumberPress = (num) => {
-        if (!activeSplitMethod) return;
+        if (!activeSplitMethod || activeSplitMethod === 'Cash') return;
         
         const currentVal = keypadInput === '0' ? '' : keypadInput;
-        const newVal = (currentVal + num).slice(0, 8);
-        setKeypadInput(newVal);
+        let newValStr = (currentVal + num).slice(0, 8);
+        let amount = parseFloat(newValStr) || 0;
+
+        // Calculate how much has been assigned to OTHER non-cash methods
+        const otherTotal = Object.entries(splitAmounts)
+            .filter(([k]) => k !== 'Cash' && k !== activeSplitMethod)
+            .reduce((sum, [, v]) => sum + v, 0);
+
+        // The absolute maximum this specific method can take
+        const maxAllowed = Math.max(0, (order?.totalAmount || 0) - otherTotal);
+
+        // Cap the amount and the keypad string if they over-type
+        if (amount > maxAllowed) {
+            amount = maxAllowed;
+            newValStr = Number.isInteger(amount) ? amount.toString() : amount.toFixed(2).replace(/\.?0+$/, '');
+        }
+
+        setKeypadInput(newValStr);
         
-        const amount = parseFloat(newVal) || 0;
         setSplitAmounts(prev => ({
             ...prev,
-            [activeSplitMethod]: amount
+            [activeSplitMethod]: amount,
+            'Cash': Math.max(0, (order?.totalAmount || 0) - otherTotal - amount)
         }));
     };
 
     const handleBackspace = () => {
-        if (!activeSplitMethod) return;
+        if (!activeSplitMethod || activeSplitMethod === 'Cash') return;
         
-        const newVal = keypadInput.slice(0, -1);
-        setKeypadInput(newVal);
-        
-        const amount = newVal === '' ? 0 : (parseFloat(newVal) || 0);
+        const newValStr = keypadInput.slice(0, -1);
+        setKeypadInput(newValStr);
+        const amount = newValStr === '' ? 0 : (parseFloat(newValStr) || 0);
+
+        const otherTotal = Object.entries(splitAmounts)
+            .filter(([k]) => k !== 'Cash' && k !== activeSplitMethod)
+            .reduce((sum, [, v]) => sum + v, 0);
+
         setSplitAmounts(prev => ({
             ...prev,
-            [activeSplitMethod]: amount
+            [activeSplitMethod]: amount,
+            'Cash': Math.max(0, (order?.totalAmount || 0) - otherTotal - amount)
         }));
     };
 
     const handleClear = () => {
-        if (!activeSplitMethod) return;
+        if (!activeSplitMethod || activeSplitMethod === 'Cash') return;
+        
         setKeypadInput('');
+        
+        const otherTotal = Object.entries(splitAmounts)
+            .filter(([k]) => k !== 'Cash' && k !== activeSplitMethod)
+            .reduce((sum, [, v]) => sum + v, 0);
+
         setSplitAmounts(prev => ({
             ...prev,
-            [activeSplitMethod]: 0
+            [activeSplitMethod]: 0,
+            'Cash': Math.max(0, (order?.totalAmount || 0) - otherTotal)
         }));
     };
-
-    const totalSplitAssigned = Object.values(splitAmounts).reduce((a, b) => a + b, 0);
-    const remainingToAssign = Math.max(0, (order?.totalAmount || 0) - totalSplitAssigned);
 
     const handleConfirmSplit = () => {
         const payments = Object.entries(splitAmounts)
@@ -147,7 +173,6 @@ export default function PaymentModal({
                     </Tabs.Tab>
                 </Tabs.List>
 
-                {/* 1. Full Payment Tab */}
                 <Tabs.Panel value="full">
                     <FullPaymentTab 
                         payInFullMethods={payInFullMethods}
@@ -155,14 +180,15 @@ export default function PaymentModal({
                     />
                 </Tabs.Panel>
 
-                {/* 2. Split Payment Tab */}
                 <Tabs.Panel value="split">
                     <SplitPaymentTab 
                         displayedSplitMethods={splitEnabledMethods}
                         activeSplitMethod={activeSplitMethod}
                         splitAmounts={splitAmounts}
                         selectSplitMethod={(methodName) => {
+                            if (methodName === 'Cash') return; // Cash is read-only
                             setActiveSplitMethod(methodName);
+                            // REMOVED AUTO-FILL BUG HERE: It now simply prepares the keypad for input
                             setKeypadInput(splitAmounts[methodName]?.toString() || '');
                         }}
                         onNumberPress={handleNumberPress}
@@ -173,34 +199,16 @@ export default function PaymentModal({
 
                     <Divider my="md" />
 
-                    <Group justify="space-between">
-                        <Stack gap={0}>
-                            <Text size="sm" c={remainingToAssign > 0.01 ? 'orange' : 'dimmed'}>
-                                Remaining: {formatCurrency(remainingToAssign)}
-                            </Text>
-                            <Text size="sm" fw={700}>
-                                Total Assigned: {formatCurrency(totalSplitAssigned)}
-                            </Text>
-                        </Stack>
-                        
-                        <Button 
-                            size="lg" 
-                            disabled={Math.abs(remainingToAssign) > 0.01}
-                            onClick={handleConfirmSplit}
-                            color="blue"
-                        >
-                            Confirm Split Payment
-                        </Button>
-                    </Group>
-                    
-                    {remainingToAssign > 0.01 && (
-                        <Alert icon={<IconAlertCircle size={16} />} color="orange" mt="sm" variant="light">
-                            Assigned amounts must match the total bill exactly.
-                        </Alert>
-                    )}
+                    <Button 
+                        fullWidth
+                        size="lg" 
+                        onClick={handleConfirmSplit}
+                        color="blue"
+                    >
+                        Confirm Split Payment
+                    </Button>
                 </Tabs.Panel>
 
-                {/* 3. Credit Sale Tab */}
                 <Tabs.Panel value="credit">
                     <CreditSaleTab 
                         companyOptions={[

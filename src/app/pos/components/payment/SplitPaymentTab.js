@@ -12,14 +12,16 @@ export default function SplitPaymentTab({
     onNumberPress,
     onBackspace,
     onClear,
-    currencySymbol = '$ ' // Added prop
+    currencySymbol = '$ '
 }) {
     return (
         <Grid>
             <Grid.Col span={6}>
                 <Stack>
                     {displayedSplitMethods.map(method => {
-                        const isEditable = method.name !== 'Cash';
+                        const isCash = method.name === 'Cash';
+                        const isEditable = !isCash; // Cash is auto-calculated
+                        
                         return (
                             <UnstyledButton
                                 key={method.name}
@@ -32,8 +34,12 @@ export default function SplitPaymentTab({
                                     opacity={isEditable ? 1 : 0.6}
                                 >
                                     <Group justify="space-between">
-                                        <Text fw={500} c={isEditable ? 'inherit' : 'dimmed'}>{method.name}</Text>
-                                        <Text fw={700}>{currencySymbol}{(splitAmounts[method.name] || 0).toFixed(2)}</Text>
+                                        <Text fw={500} c={isEditable ? 'inherit' : 'dimmed'}>
+                                            {method.name} {isCash && '(Auto-calculated)'}
+                                        </Text>
+                                        <Text fw={700} c={isCash ? 'dimmed' : 'inherit'}>
+                                            {currencySymbol}{(splitAmounts[method.name] || 0).toFixed(2)}
+                                        </Text>
                                     </Group>
                                 </Paper>
                             </UnstyledButton>
@@ -46,7 +52,7 @@ export default function SplitPaymentTab({
                     onNumberPress={onNumberPress}
                     onBackspace={onBackspace}
                     onClear={onClear}
-                    disabled={activeSplitMethod === 'Cash' || activeSplitMethod === 'Credit'}
+                    disabled={!activeSplitMethod || activeSplitMethod === 'Cash' || activeSplitMethod === 'Credit'}
                 />
             </Grid.Col>
         </Grid>
