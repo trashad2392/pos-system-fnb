@@ -9,19 +9,20 @@ import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import './globals.css';
 
-
 export default function RootLayout({ children }) {
   const pathname = usePathname();
   const isPrintRoute = pathname === '/print/receipt/';
+  
+  // 1. Check if we are currently on the POS page
+  const isPosRoute = pathname.startsWith('/pos');
 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <ColorSchemeScript />
       </head>
-      {/* 🛑 FIX: Apply inline style to the body to ensure strict 100vh height 
-          and hide any residual overflow caused by sub-pixel rounding or complex calc() formulas. */}
-      <body style={{ height: '100vh', overflow: 'hidden' }}>
+      {/* 2. Apply the strict 100vh and hidden overflow ONLY to the POS page */}
+      <body style={isPosRoute ? { height: '100vh', overflow: 'hidden' } : {}}>
         <MantineProvider>
           {isPrintRoute ? (
             // If it's the print route, render *only* the children (the receipt page)
